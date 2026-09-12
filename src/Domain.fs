@@ -51,13 +51,35 @@ type TrackSource =
     | AudioFile of path: string
     | DemoTone of kind: DemoKind
 
+type RipInfo = {
+    Drive: string
+    StartLba: int
+    Sectors: int
+}
+
 type Track = {
     Index: int
     Number: int
     Title: string
     Duration: TimeSpan
     Source: TrackSource
+    Rip: RipInfo option
 }
+
+type RipProgress = {
+    Current: int
+    Total: int
+    Label: string
+    Fraction: float
+    Destination: string
+}
+
+type RipState =
+    | RipIdle
+    | RipRunning of RipProgress
+    | RipDone of files: int * destination: string
+    | RipFailed of message: string
+    | RipCanceled of destination: string
 
 type DiscKind =
     | DigitalAudioCd
@@ -111,6 +133,7 @@ module EqPreset =
 type PendingAction =
     | Idle
     | OpenFolder
+    | RipPrompt
     | Quit
 
 module TimeFmt =

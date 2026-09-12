@@ -103,6 +103,7 @@ module DemoDisc =
                 Title = title
                 Duration = dur
                 Source = DemoTone kind
+                Rip = None
             })
 
         {

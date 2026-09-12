@@ -7,40 +7,50 @@ module Input =
     let handle (player: AudioPlayer) (key: ConsoleKeyInfo) =
         let alt = key.Modifiers &&& ConsoleModifiers.Alt = ConsoleModifiers.Alt
 
-        match key.Key, key.KeyChar, player.Focus with
-        | ConsoleKey.Q, _, _ -> player.RequestQuit()
-        | ConsoleKey.Spacebar, _, _ -> player.TogglePlay()
-        | ConsoleKey.S, _, _ -> player.Stop()
-        | ConsoleKey.Enter, _, _ -> player.PlaySelected()
-        | ConsoleKey.N, _, _ -> player.Next()
-        | ConsoleKey.P, _, _ -> player.Previous()
-        | ConsoleKey.Tab, _, _ -> player.ToggleFocus()
-        | ConsoleKey.R, _, _ -> player.CycleRepeat()
-        | ConsoleKey.H, _, _ -> player.ToggleShuffle()
-        | ConsoleKey.D, _, _ -> player.DetectCd()
-        | ConsoleKey.O, _, _ -> player.RequestOpenFolder()
-        | ConsoleKey.M, _, _ -> player.LoadDemo()
-        | ConsoleKey.E, _, _ -> player.Eject()
-        | ConsoleKey.T, _, _ -> player.ToggleEq()
-        | ConsoleKey.F, _, _
-        | ConsoleKey.D0, _, _ -> player.ResetEq()
-        | ConsoleKey.Oem2, _, _ -> player.ToggleHelp()
-        | _, '?', _ -> player.ToggleHelp()
-        | ConsoleKey.LeftArrow, _, Equalizer -> player.MoveEq -1
-        | ConsoleKey.RightArrow, _, Equalizer -> player.MoveEq 1
-        | ConsoleKey.UpArrow, _, Equalizer -> player.AdjustEq 1.f
-        | ConsoleKey.DownArrow, _, Equalizer -> player.AdjustEq -1.f
-        | ConsoleKey.LeftArrow, _, TrackList -> player.Seek(TimeSpan.FromSeconds -5.0)
-        | ConsoleKey.RightArrow, _, TrackList -> player.Seek(TimeSpan.FromSeconds 5.0)
-        | ConsoleKey.UpArrow, _, TrackList -> player.MoveSelection -1
-        | ConsoleKey.DownArrow, _, TrackList -> player.MoveSelection 1
-        | _, ('+' | '='), _ -> player.AdjustEq 1.f
-        | _, ('-' | '_'), _ -> player.AdjustEq -1.f
-        | _, (',' | '['), _ -> player.AdjustVolume -0.05f
-        | _, ('.' | ']'), _ -> player.AdjustVolume 0.05f
-        | ConsoleKey.Escape, _, _ when player.ShowHelp -> player.ToggleHelp()
-        | _ when alt -> ()
-        | _ -> ()
+        if player.IsRipping then
+            match key.Key with
+            | ConsoleKey.S
+            | ConsoleKey.Escape -> player.CancelRip()
+            | ConsoleKey.Q ->
+                player.CancelRip()
+                player.RequestQuit()
+            | _ -> ()
+        else
+            match key.Key, key.KeyChar, player.Focus with
+            | ConsoleKey.Q, _, _ -> player.RequestQuit()
+            | ConsoleKey.X, _, _ -> player.RequestRip()
+            | ConsoleKey.Spacebar, _, _ -> player.TogglePlay()
+            | ConsoleKey.S, _, _ -> player.Stop()
+            | ConsoleKey.Enter, _, _ -> player.PlaySelected()
+            | ConsoleKey.N, _, _ -> player.Next()
+            | ConsoleKey.P, _, _ -> player.Previous()
+            | ConsoleKey.Tab, _, _ -> player.ToggleFocus()
+            | ConsoleKey.R, _, _ -> player.CycleRepeat()
+            | ConsoleKey.H, _, _ -> player.ToggleShuffle()
+            | ConsoleKey.D, _, _ -> player.DetectCd()
+            | ConsoleKey.O, _, _ -> player.RequestOpenFolder()
+            | ConsoleKey.M, _, _ -> player.LoadDemo()
+            | ConsoleKey.E, _, _ -> player.Eject()
+            | ConsoleKey.T, _, _ -> player.ToggleEq()
+            | ConsoleKey.F, _, _
+            | ConsoleKey.D0, _, _ -> player.ResetEq()
+            | ConsoleKey.Oem2, _, _ -> player.ToggleHelp()
+            | _, '?', _ -> player.ToggleHelp()
+            | ConsoleKey.LeftArrow, _, Equalizer -> player.MoveEq -1
+            | ConsoleKey.RightArrow, _, Equalizer -> player.MoveEq 1
+            | ConsoleKey.UpArrow, _, Equalizer -> player.AdjustEq 1.f
+            | ConsoleKey.DownArrow, _, Equalizer -> player.AdjustEq -1.f
+            | ConsoleKey.LeftArrow, _, TrackList -> player.Seek(TimeSpan.FromSeconds -5.0)
+            | ConsoleKey.RightArrow, _, TrackList -> player.Seek(TimeSpan.FromSeconds 5.0)
+            | ConsoleKey.UpArrow, _, TrackList -> player.MoveSelection -1
+            | ConsoleKey.DownArrow, _, TrackList -> player.MoveSelection 1
+            | _, ('+' | '='), _ -> player.AdjustEq 1.f
+            | _, ('-' | '_'), _ -> player.AdjustEq -1.f
+            | _, (',' | '['), _ -> player.AdjustVolume -0.05f
+            | _, ('.' | ']'), _ -> player.AdjustVolume 0.05f
+            | ConsoleKey.Escape, _, _ when player.ShowHelp -> player.ToggleHelp()
+            | _ when alt -> ()
+            | _ -> ()
 
 module App =
     let private promptFolder (player: AudioPlayer) =
@@ -53,6 +63,30 @@ module App =
 
         if not (String.IsNullOrWhiteSpace path) then
             player.LoadFolder(path.Trim('"'))
+
+    let private promptRip (player: AudioPlayer) =
+        AnsiConsole.WriteLine()
+        let suggested = Ripper.defaultDirectory player.Disc.Title
+
+        let dest =
+            AnsiConsole.Prompt(
+                TextPrompt<string>($"抽出先フォルダ [grey]({Markup.Escape suggested})[/]:")
+                    .AllowEmpty())
+
+        let dir =
+            if String.IsNullOrWhiteSpace dest then
+                suggested
+            else
+                dest.Trim('"')
+
+        let scope =
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("何を抽出しますか？")
+                    .AddChoices("選択中のトラック", "すべてのトラック"))
+
+        let allTracks = scope = "すべてのトラック"
+        player.StartRip(dir, allTracks)
 
     let rec private live (player: AudioPlayer) =
         AnsiConsole.Clear()
@@ -71,6 +105,7 @@ module App =
 
                     match player.Pending with
                     | OpenFolder
+                    | RipPrompt
                     | Quit -> exit <- true
                     | Idle ->
                         player.Tick()
@@ -80,10 +115,14 @@ module App =
 
         match player.ClearPending() with
         | Quit ->
+            player.CancelRip()
             player.Stop()
             player.Finish()
         | OpenFolder ->
             promptFolder player
+            live player
+        | RipPrompt ->
+            promptRip player
             live player
         | Idle ->
             if player.Running then live player

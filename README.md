@@ -26,6 +26,18 @@ dotnet run -- "C:\path\to\album"
 
 フォルダ内の WAV / MP3 / M4A などをアルバムとして開きます。
 
+## CD 抽出
+
+CD-DA を 44.1kHz / 16bit / ステレオの WAV に書き出します。再生中に `X` を押すか、次のコマンドを使います。
+
+```powershell
+dotnet run -- --rip
+dotnet run -- --rip --track 3
+dotnet run -- --rip --out "C:\rips"
+```
+
+既定の出力先は `ミュージック\SOUND\<ディスク名>` です。抽出中は `S` または `Esc` でキャンセルできます。
+
 ## 主なキー
 
 | キー | 動作 |
@@ -35,6 +47,7 @@ dotnet run -- "C:\path\to\album"
 | ↑↓ / +/- | 選択、または EQ ゲイン |
 | ←→ | 5 秒シーク（EQ フォーカス時はバンド移動） |
 | , . | 音量 |
+| X | CD を WAV 抽出 |
 | D / O / M | CD 検出 / フォルダ / デモ |
 | T / F | EQ バイパス / フラット |
 | ? / Q | ヘルプ / 終了 |

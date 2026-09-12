@@ -2,6 +2,7 @@ namespace Sound
 
 open System
 open System.IO
+open System.Threading
 open NAudio.Wave
 open NAudio.Wave.SampleProviders
 
@@ -22,6 +23,8 @@ type AudioPlayer() =
     let mutable showHelp = false
     let mutable running = true
     let mutable pending = Idle
+    let mutable ripState = RipIdle
+    let mutable ripCancel = false
     let mutable status = "デモディスクをロードしました。D で CD を検出、O でフォルダを開きます。"
     let mutable output: IWavePlayer option = None
     let mutable stream: WaveStream option = None
@@ -208,6 +211,12 @@ type AudioPlayer() =
     member _.Running = running
     member _.Status = status
     member _.Pending = pending
+    member _.RipState = ripState
+
+    member _.IsRipping =
+        match ripState with
+        | RipRunning _ -> true
+        | _ -> false
 
     member _.CurrentTrack =
         if disc.Tracks.Length = 0 then
@@ -271,6 +280,7 @@ type AudioPlayer() =
                             Title = Path.GetFileNameWithoutExtension(file)
                             Duration = dur
                             Source = AudioFile file
+                            Rip = None
                         })
 
                 let folder = DirectoryInfo(path).Name
@@ -421,7 +431,116 @@ type AudioPlayer() =
     member _.CycleRepeat() = repeat <- repeat.Next()
     member _.ToggleShuffle() = shuffle <- not shuffle
     member _.RequestOpenFolder() = pending <- OpenFolder
+    member _.RequestRip() = pending <- RipPrompt
     member _.RequestQuit() = pending <- Quit
+
+    member _.CancelRip() =
+        match ripState with
+        | RipRunning _ ->
+            ripCancel <- true
+            status <- "抽出をキャンセルしています…"
+        | _ -> ()
+
+    member this.StartRip(outputDir: string, allTracks: bool) =
+        if this.IsRipping then
+            status <- "すでに抽出中です"
+        elif String.IsNullOrWhiteSpace outputDir then
+            status <- "出力先が空です"
+        else
+            let attachRip () =
+                match disc.Drive with
+                | None -> ()
+                | Some letter ->
+                    match CdDrive.readTocTracks letter with
+                    | Error _ -> ()
+                    | Ok toc ->
+                        let byNumber =
+                            toc
+                            |> Array.choose (fun t -> t.Rip |> Option.map (fun r -> t.Number, r))
+                            |> Map.ofArray
+
+                        disc <-
+                            { disc with
+                                Tracks =
+                                    disc.Tracks
+                                    |> Array.map (fun t ->
+                                        match t.Rip, Map.tryFind t.Number byNumber with
+                                        | Some _, _ -> t
+                                        | None, Some rip -> { t with Rip = Some rip }
+                                        | None, None -> t)
+                            }
+
+            if disc.Tracks |> Array.forall (fun t -> t.Rip.IsNone) then
+                attachRip ()
+
+            let pool =
+                if allTracks then
+                    disc.Tracks
+                elif disc.Tracks.Length = 0 then
+                    [||]
+                else
+                    [| disc.Tracks[selectedIndex] |]
+
+            let targets =
+                pool
+                |> Array.choose (fun t -> t.Rip |> Option.map (fun r -> t, r))
+
+            if targets.Length = 0 then
+                status <- "このディスクは抽出できません。CD のデジタル読み取りが必要です。"
+                ripState <- RipFailed status
+            else
+                this.Stop()
+                ripCancel <- false
+
+                ripState <-
+                    RipRunning {
+                        Current = 1
+                        Total = targets.Length
+                        Label = (fst targets[0]).Title
+                        Fraction = 0.0
+                        Destination = outputDir
+                    }
+
+                status <- $"WAV 抽出を開始: {outputDir}"
+                let handle = digitalHandle
+
+                Tasks.Task.Run(fun () ->
+                    match
+                        Ripper.extractTracks
+                            handle
+                            targets
+                            outputDir
+                            (fun cur total label frac ->
+                                ripState <-
+                                    RipRunning {
+                                        Current = cur
+                                        Total = total
+                                        Label = label
+                                        Fraction = frac
+                                        Destination = outputDir
+                                    }
+
+                                status <- sprintf "抽出中 %d/%d  %s  %.0f%%" cur total label (frac * 100.0))
+                            (fun () -> ripCancel)
+                    with
+                    | Ok n ->
+                        ripState <- RipDone(n, outputDir)
+                        status <- sprintf "%d 曲を書き出しました: %s" n outputDir
+                    | Error(msg, n) when ripCancel ->
+                        ripState <- RipCanceled outputDir
+                        status <-
+                            if n > 0 then
+                                sprintf "キャンセル（%d 曲まで完了）: %s" n outputDir
+                            else
+                                "抽出をキャンセルしました"
+                    | Error(msg, n) ->
+                        ripState <- RipFailed msg
+                        status <-
+                            if n > 0 then
+                                sprintf "%s（%d 曲まで完了）" msg n
+                            else
+                                msg)
+                |> ignore
 
     member _.ClearPending() =
         let p = pending
@@ -437,10 +556,13 @@ type AudioPlayer() =
         elif state <> Playing then
             analyzer.Decay()
 
-    member _.Finish() = running <- false
+    member _.Finish() =
+        ripCancel <- true
+        running <- false
 
     interface IDisposable with
         member _.Dispose() =
+            ripCancel <- true
             running <- false
             releaseWave ()
             Mci.close ()

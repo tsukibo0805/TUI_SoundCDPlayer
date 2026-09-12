@@ -239,7 +239,7 @@ module CdDrive =
             Buffer.BlockCopy(chunk, 0, dest, destOffset, chunk.Length)
             Ok()
 
-    let private parseToc (buffer: byte array) =
+    let private parseToc (letter: string) (buffer: byte array) =
         let first = int buffer[2]
         let last = int buffer[3]
 
@@ -292,6 +292,12 @@ module CdDrive =
                                 Title = sprintf "トラック %02d" n
                                 Duration = TimeFmt.fromSectors sectors
                                 Source = DigitalCd(0n, startLba, sectors)
+                                Rip =
+                                    Some {
+                                        Drive = letter
+                                        StartLba = startLba
+                                        Sectors = sectors
+                                    }
                             })
 
                         index <- index + 1
@@ -313,7 +319,7 @@ module CdDrive =
                 closeHandle handle
                 Error $"TOC を読めません (Win32 {code})"
             | Ok _ ->
-                match parseToc tocBuf with
+                match parseToc letter tocBuf with
                 | Error e ->
                     closeHandle handle
                     Error e
@@ -339,6 +345,20 @@ module CdDrive =
                                 Drive = Some letter
                                 Tracks = bound
                             })
+
+    let readTocTracks (letter: string) =
+        match openHandle letter with
+        | Error e -> Error e
+        | Ok handle ->
+            let tocBuf = Array.zeroCreate 804
+
+            let result =
+                match ioctl handle Win32.ioctlCdromReadToc [||] tocBuf with
+                | Error code -> Error $"TOC を読めません (Win32 {code})"
+                | Ok _ -> parseToc letter tocBuf
+
+            closeHandle handle
+            result
 
     let private loadMci (letter: string) =
         match Mci.openDrive $"{letter}:" with
@@ -366,6 +386,7 @@ module CdDrive =
                                     Title = sprintf "トラック %02d" i
                                     Duration = dur
                                     Source = MciCd(letter, i)
+                                    Rip = None
                                 }
                         |]
 
@@ -378,12 +399,30 @@ module CdDrive =
                             Tracks = tracks
                         }
 
+    let private withRipFromToc (letter: string) (disc: Disc) =
+        match readTocTracks letter with
+        | Error _ -> disc
+        | Ok toc ->
+            let byNumber =
+                toc
+                |> Array.choose (fun t -> t.Rip |> Option.map (fun r -> t.Number, r))
+                |> Map.ofArray
+
+            let tracks =
+                disc.Tracks
+                |> Array.map (fun t ->
+                    match Map.tryFind t.Number byNumber with
+                    | Some rip -> { t with Rip = Some rip }
+                    | None -> t)
+
+            { disc with Tracks = tracks }
+
     let load (letter: string) =
         match loadDigital letter with
         | Ok(_, disc) -> Ok disc
         | Error digitalError ->
             match loadMci letter with
-            | Ok disc -> Ok disc
+            | Ok disc -> Ok(withRipFromToc letter disc)
             | Error mciError -> Error $"{digitalError} / {mciError}"
 
     let tryLoadFirst () =

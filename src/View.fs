@@ -85,6 +85,49 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
             .BorderStyle(Style.Parse("gold1"))
             .Padding(1, 0, 1, 0)
 
+    let private ripPanel (player: AudioPlayer) =
+        match player.RipState with
+        | RipIdle -> None
+        | RipRunning p ->
+            let width = max 20 (AnsiConsole.Profile.Width - 18)
+            let bar = progressBar (TimeSpan.FromSeconds(p.Fraction * 100.0)) (TimeSpan.FromSeconds 100.0) width
+            let pct = int (p.Fraction * 100.0)
+            let pctText = string pct + "%"
+            let body =
+                $"""[bold gold1]CD → WAV[/]  {p.Current} / {p.Total}   [wheat1]{esc p.Label}[/]
+[gold1]{bar}[/]  {pctText}
+[grey]{esc p.Destination}[/]
+[grey]S または Esc でキャンセル[/]"""
+
+            Some(
+                Panel(Markup(body))
+                    .Header(" EXTRACT ")
+                    .Border(BoxBorder.Rounded)
+                    .BorderStyle(Style.Parse("springgreen1"))
+                    .Padding(1, 0, 1, 0)
+                :> IRenderable)
+        | RipDone(n, dest) ->
+            Some(
+                Panel(Markup($"[springgreen1]{n} 曲を書き出しました[/]\n[grey]{esc dest}[/]"))
+                    .Header(" EXTRACT ")
+                    .Border(BoxBorder.Rounded)
+                    .BorderStyle(Style.Parse("springgreen1"))
+                :> IRenderable)
+        | RipFailed msg ->
+            Some(
+                Panel(Markup($"[red1]{esc msg}[/]"))
+                    .Header(" EXTRACT ")
+                    .Border(BoxBorder.Rounded)
+                    .BorderStyle(Style.Parse("red1"))
+                :> IRenderable)
+        | RipCanceled dest ->
+            Some(
+                Panel(Markup($"[yellow]抽出をキャンセルしました[/]\n[grey]{esc dest}[/]"))
+                    .Header(" EXTRACT ")
+                    .Border(BoxBorder.Rounded)
+                    .BorderStyle(Style.Parse("yellow"))
+                :> IRenderable)
+
     let private spectrum (player: AudioPlayer) =
         let width = max 24 (AnsiConsole.Profile.Width - 8)
         let bars, peaks = player.Analyzer.Snapshot()
@@ -241,7 +284,7 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
 
     let private footer (player: AudioPlayer) =
         let keys =
-            " [grey]Space[/] 再生/停止  [grey]S[/] ストップ  [grey]N/P[/] 次/前  [grey]←→[/] シーク  [grey],[/] [grey].[/] 音量  [grey]Tab[/] 切替  [grey]R[/] リピート  [grey]H[/] シャッフル  [grey]D[/] CD  [grey]O[/] フォルダ  [grey]M[/] デモ  [grey]E[/] 取り出し  [grey]?[/] ヘルプ  [grey]Q[/] 終了 "
+            " [grey]Space[/] 再生/停止  [grey]S[/] ストップ  [grey]X[/] 抽出  [grey]N/P[/] 次/前  [grey]←→[/] シーク  [grey],[/] [grey].[/] 音量  [grey]Tab[/] 切替  [grey]R[/] リピート  [grey]H[/] シャッフル  [grey]D[/] CD  [grey]O[/] フォルダ  [grey]M[/] デモ  [grey]E[/] 取り出し  [grey]?[/] ヘルプ  [grey]Q[/] 終了 "
 
         let status = $"[italic grey70]{esc player.Status}[/]"
         Markup($"{status}\n{keys}")
@@ -258,11 +301,12 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
   [wheat1]R[/]      リピート OFF/ALL/ONE      [wheat1]H[/]      シャッフル
   [wheat1]D[/]      CD 検出                   [wheat1]O[/]      フォルダを開く
   [wheat1]M[/]      デモディスク              [wheat1]E[/]      CD 取り出し
-  [wheat1]Q[/]      終了
+  [wheat1]X[/]      CD を WAV 抽出            [wheat1]Q[/]      終了
 
 [bold gold1]音源[/]
   光学ドライブの CD-DA をデジタル読み取りし、10バンド EQ をかけて再生します。
   生読み取りができない場合は MCI にフォールバックします（その場合 EQ は無効）。
+  [wheat1]X[/] で選択トラックまたは全トラックを 44.1kHz / 16bit / ステレオ WAV に書き出します。
   フォルダ内の WAV / MP3 / M4A などもディスクとして扱えます。
   ディスクが無いときはデモ信号で EQ を試せます。"""
 
@@ -272,11 +316,17 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
             .BorderStyle(Style.Parse("khaki1"))
 
     let render (player: AudioPlayer) : IRenderable =
-        let layout = Rows(
-            header player,
-            spectrum player,
-            equalizer player,
-            (if player.ShowHelp then helpPanel () :> IRenderable else tracks player),
-            footer player)
+        let children = [
+            yield header player :> IRenderable
 
-        layout
+            match ripPanel player with
+            | Some panel -> yield panel
+            | None -> ()
+
+            yield spectrum player :> IRenderable
+            yield equalizer player :> IRenderable
+            yield (if player.ShowHelp then helpPanel () :> IRenderable else tracks player)
+            yield footer player :> IRenderable
+        ]
+
+        Rows(Array.ofList children) :> IRenderable
