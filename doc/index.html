@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOUND TUI CD Player 設計書</title>
+  <style>
+    :root {
+      --bg: #12110e;
+      --bg-elev: #1b1914;
+      --bg-soft: #242017;
+      --line: #3d3422;
+      --gold: #e0b044;
+      --gold-dim: #a8842e;
+      --cream: #f3e6c4;
+      --muted: #9a8d72;
+      --ok: #7dcaa0;
+      --warn: #e0b044;
+      --ng: #d36b5c;
+      --mono: "Cascadia Code", "Sarasa Mono", "Consolas", ui-monospace, monospace;
+      --sans: "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #3a2d12 0%, transparent 50%),
+        var(--bg);
+      color: var(--cream);
+      font-family: var(--sans);
+      line-height: 1.7;
+    }
+
+    a { color: var(--gold); }
+    code, kbd {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: #2a2418;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 0.05em 0.4em;
+    }
+    kbd { color: var(--gold); }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      max-width: 1180px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow: auto;
+      padding: 28px 18px;
+      border-right: 1px solid var(--line);
+      background: rgba(18, 17, 14, 0.92);
+    }
+    nav .brand {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+    nav h1 {
+      font-size: 18px;
+      margin: 0 0 18px;
+      font-weight: 700;
+    }
+    nav a {
+      display: block;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 5px 0;
+    }
+    nav a:hover { color: var(--gold); }
+
+    main { padding: 48px 48px 96px; }
+    header.hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #2a2214, #18150f);
+      border-radius: 16px;
+      padding: 36px;
+      margin-bottom: 48px;
+    }
+    header.hero .eyebrow {
+      color: var(--gold);
+      letter-spacing: 0.14em;
+      font-size: 12px;
+    }
+    header.hero h1 {
+      margin: 8px 0 12px;
+      font-size: 36px;
+      letter-spacing: 0.04em;
+    }
+    header.hero p { color: var(--muted); margin: 0; max-width: 42em; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--bg-soft);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chip b { color: var(--cream); font-weight: 600; }
+
+    section {
+      margin: 56px 0;
+      scroll-margin-top: 24px;
+    }
+    h2 {
+      font-size: 22px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      margin: 0 0 18px;
+    }
+    h2 span { color: var(--gold-dim); font-size: 13px; margin-right: 8px; letter-spacing: 0.12em; }
+    h3 { font-size: 16px; color: var(--gold); margin: 28px 0 10px; }
+
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0 0 14px; padding-left: 1.3em; }
+    li { margin: 4px 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 12px 0 20px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #2a2418; color: var(--gold); font-weight: 600; }
+    tr:nth-child(even) td { background: #18150f; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .card h3 { margin-top: 0; }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .flow .box {
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 92px;
+      text-align: center;
+      font-size: 13px;
+    }
+    .flow .box strong { display: block; color: var(--gold); font-size: 12px; }
+    .flow .arrow { color: var(--gold-dim); }
+
+    .arch {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .arch .col {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .arch h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: 0.08em; }
+    .arch ul { padding-left: 1.1em; font-size: 13px; color: var(--muted); }
+
+    .state {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .state .s {
+      flex: 1;
+      min-width: 140px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .state .s b { display: block; color: var(--gold); }
+
+    footer {
+      margin-top: 64px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+      nav {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 14px;
+        padding: 16px 18px;
+      }
+      nav .brand, nav h1 { width: 100%; }
+      nav h1 { margin-bottom: 8px; }
+      nav a { padding: 2px 0; }
+      main { padding: 24px 18px 64px; }
+      .grid-2, .arch { grid-template-columns: 1fr; }
+      header.hero h1 { font-size: 28px; }
+    }
+
+    @media print {
+      nav { display: none; }
+      .wrap { display: block; }
+      body { background: #fff; color: #222; }
+      header.hero, .card, .arch .col { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <div class="brand">SOUND / DESIGN</div>
+      <h1>設計書</h1>
+      <a href="#overview">1. 概要</a>
+      <a href="#goals">2. 目的と範囲</a>
+      <a href="#requirements">3. 前提・環境</a>
+      <a href="#architecture">4. 全体構成</a>
+      <a href="#modules">5. モジュール</a>
+      <a href="#domain">6. ドメイン</a>
+      <a href="#pipeline">7. 再生パイプライン</a>
+      <a href="#cd">8. CD 読み取り</a>
+      <a href="#eq">9. イコライザ</a>
+      <a href="#spectrum">10. スペクトル</a>
+      <a href="#rip">11. 抽出</a>
+      <a href="#tui">12. TUI と操作</a>
+      <a href="#cli">13. CLI</a>
+      <a href="#states">14. 状態遷移</a>
+      <a href="#limits">15. 制約と今後</a>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div class="eyebrow">SOFTWARE DESIGN DOCUMENT</div>
+        <h1>SOUND TUI CD Player</h1>
+        <p>F# で実装した Windows 向けターミナル CD プレイヤー。光学ドライブの CD-DA 再生、10 バンド EQ、スペクトル表示、WAV 抽出を一つの対話型 TUI にまとめる。</p>
+        <div class="meta">
+          <span class="chip"><b>版</b> 1.0</span>
+          <span class="chip"><b>日付</b> 2026-09-12</span>
+          <span class="chip"><b>言語</b> F# / .NET 10</span>
+          <span class="chip"><b>OS</b> Windows</span>
+          <span class="chip"><b>リポジトリ</b> TUI_SoudCDPlayer</span>
+        </div>
+      </header>
+
+      <section id="overview">
+        <h2><span>01</span>概要</h2>
+        <p>本ソフトウェアは、コンソール上でコンパクトディスクのように扱える再生機である。実ディスク、フォルダ内の音声ファイル、内蔵デモ信号を同じ「ディスク / トラック」モデルで扱い、デジタル経路では再生中にグラフィックイコライザを適用する。</p>
+        <div class="grid-2">
+          <div class="card">
+            <h3>できること</h3>
+            <ul>
+              <li>CD-DA のデジタル再生（EQ 付き）</li>
+              <li>MCI フォールバック再生</li>
+              <li>フォルダをアルバムとして開く</li>
+              <li>デモ信号で EQ を試聴</li>
+              <li>選択 / 全トラックの WAV 抽出</li>
+              <li>ライブ・スペクトルと 10 バンド EQ</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>やらないこと</h3>
+            <ul>
+              <li>CD-TEXT / MusicBrainz による自動タグ付け</li>
+              <li>データ CD / DVD / Blu-ray の再生</li>
+              <li>エンコード済み形式（MP3 等）へのリッピング</li>
+              <li>クロスプラットフォームの光学ドライブ制御</li>
+              <li>GUI（WinForms / WPF / Web）</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="goals">
+        <h2><span>02</span>目的と範囲</h2>
+        <h3>目的</h3>
+        <ol>
+          <li>端末だけで CD の選曲・再生・停止・シークができること</li>
+          <li>デジタル PCM 経路で 10 バンド EQ が即座に音へ乗ること</li>
+          <li>ディスクが無い環境でもデモディスクで操作と EQ を確認できること</li>
+          <li>CD-DA を可逆に近い形（44.1 kHz / 16 bit / stereo WAV）で取り出せること</li>
+        </ol>
+        <h3>品質方針</h3>
+        <ul>
+          <li>再生と抽出は同じ TOC / LBA 情報を共有する</li>
+          <li>光学ドライブが生読み取りできない場合は再生を止めず MCI に落とす</li>
+          <li>抽出中はドライブ競合を避けるため再生を停止する</li>
+          <li>ファイル名やパスに含まれる Spectre マークアップ文字はエスケープする</li>
+        </ul>
+      </section>
+
+      <section id="requirements">
+        <h2><span>03</span>前提・環境</h2>
+        <table>
+          <thead>
+            <tr><th>項目</th><th>内容</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ランタイム</td><td>.NET 10、出力はコンソール EXE（アセンブリ名 <code>sound</code>）</td></tr>
+            <tr><td>言語</td><td>F#。コンパイル順は fsproj の Include 順に従う</td></tr>
+            <tr><td>依存</td><td>NAudio 2.2.1、Spectre.Console 0.51.1</td></tr>
+            <tr><td>OS</td><td>Windows（<code>CreateFileW</code> / <code>DeviceIoControl</code> / <code>mciSendStringW</code>）</td></tr>
+            <tr><td>音声出力</td><td>NAudio <code>WaveOutEvent</code>（DesiredLatency 200 ms）</td></tr>
+            <tr><td>端末</td><td>UTF-8 と ANSI カラーが使える Windows Terminal を想定</td></tr>
+            <tr><td>権限</td><td>CD の RAW 読み取りは環境により管理者権限が必要</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="architecture">
+        <h2><span>04</span>全体構成</h2>
+        <p>エントリポイントは薄い。引数で CLI 作業（ヘルプ、自己検査、抽出）を分岐し、それ以外は TUI セッション <code>App.run</code> に入る。</p>
+        <div class="arch">
+          <div class="col">
+            <h3>PRESENTATION</h3>
+            <ul>
+              <li>Program.fs — 起動分岐</li>
+              <li>App.fs — Live ループとプロンプト</li>
+              <li>View.fs — Spectre 描画</li>
+            </ul>
+          </div>
+          <div class="col">
+            <h3>APPLICATION</h3>
+            <ul>
+              <li>Player.fs — 再生・EQ・抽出ジョブ</li>
+              <li>Ripper.fs — WAV 書き出し</li>
+              <li>DemoSignal.fs — 仮想ディスク</li>
+            </ul>
+          </div>
+          <div class="col">
+            <h3>INFRASTRUCTURE</h3>
+            <ul>
+              <li>CdDrive.fs — TOC / RAW / MCI</li>
+              <li>Equalizer.fs / Spectrum.fs</li>
+              <li>Domain.fs — 共有型</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="box"><strong>入力</strong>キー / 引数</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>App</strong>Live + Prompt</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>Player</strong>状態機械</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>Source</strong>CD / File / Demo</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>DSP</strong>EQ → Vol → FFT</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>Out</strong>WaveOut / WAV</div>
+        </div>
+      </section>
+
+      <section id="modules">
+        <h2><span>05</span>モジュール</h2>
+        <table>
+          <thead>
+            <tr><th>ファイル</th><th>責務</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>src/Domain.fs</code></td><td>再生状態、フォーカス、トラックソース、ディスク種別、EQ バンド、抽出状態、MSF/LBA 換算</td></tr>
+            <tr><td><code>src/Equalizer.fs</code></td><td>チャンネル別 BiQuad ピーキング EQ。バイパスとゲイン更新</td></tr>
+            <tr><td><code>src/Spectrum.fs</code></td><td>Hann 窓 FFT、対数バーへの再マップ、減衰とピークホールド</td></tr>
+            <tr><td><code>src/DemoSignal.fs</code></td><td>ノイズ / 低域 / 和音 / スイープのシーク可能な仮想 WaveStream</td></tr>
+            <tr><td><code>src/CdDrive.fs</code></td><td>ドライブ列挙、TOC、RAW CDDA、MCI、イジェクト、<code>CdWaveStream</code></td></tr>
+            <tr><td><code>src/Ripper.fs</code></td><td>ファイル名浄化、再試行付きセクタ読み、WAV 出力</td></tr>
+            <tr><td><code>src/Player.fs</code></td><td>単一のセッション状態。再生制御、EQ、抽出タスク</td></tr>
+            <tr><td><code>src/View.fs</code></td><td>TRANSPORT / SPECTRUM / EQUALIZER / TRACKS / EXTRACT / HELP</td></tr>
+            <tr><td><code>src/App.fs</code></td><td>キー割り当て、Live 再描画、フォルダ / 抽出プロンプト</td></tr>
+            <tr><td><code>Program.fs</code></td><td>CLI、自己検査、スモーク、TUI 起動</td></tr>
+          </tbody>
+        </table>
+        <p>F# はファイル順が依存順になる。Domain → DSP → Drive → Ripper → Player → View → App → Program。</p>
+      </section>
+
+      <section id="domain">
+        <h2><span>06</span>ドメイン</h2>
+        <h3>ディスクとトラック</h3>
+        <p>すべての音源は <code>Disc</code> と <code>Track[]</code> に正規化する。トラックは再生用 <code>TrackSource</code> と、抽出用の任意 <code>RipInfo</code> を持つ。</p>
+        <table>
+          <thead><tr><th>TrackSource</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr><td><code>DigitalCd</code></td><td>デバイスハンドル + 開始 LBA + セクタ数。EQ 可能な PCM 経路</td></tr>
+            <tr><td><code>MciCd</code></td><td>ドライブレター + トラック番号。Windows MCI で再生</td></tr>
+            <tr><td><code>AudioFile</code></td><td>ファイルパス。<code>AudioFileReader</code></td></tr>
+            <tr><td><code>DemoTone</code></td><td>生成信号の種類</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>DiscKind</th><th>表示</th><th>EQ</th><th>抽出</th></tr></thead>
+          <tbody>
+            <tr><td>DigitalAudioCd</td><td>CD DIGITAL</td><td>あり</td><td>あり</td></tr>
+            <tr><td>MciAudioCd</td><td>CD MCI</td><td>なし（再生）</td><td>TOC が取れれば試行</td></tr>
+            <tr><td>FolderDisc</td><td>FOLDER</td><td>あり</td><td>なし</td></tr>
+            <tr><td>DemoDisc</td><td>DEMO</td><td>あり</td><td>なし</td></tr>
+          </tbody>
+        </table>
+        <h3>時間</h3>
+        <p>CD の 1 秒は 75 セクタ。LBA は <code>(M×60+S)×75+F−150</code>。トラック長は次トラック開始（またはリードアウト）との差分。</p>
+      </section>
+
+      <section id="pipeline">
+        <h2><span>07</span>再生パイプライン</h2>
+        <p>デジタル経路は次のサンプルチェインで <code>WaveOutEvent</code> に渡す。</p>
+        <div class="flow">
+          <div class="box"><strong>WaveStream</strong>CD / File / Demo</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>ToSampleProvider</strong>float32</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>Equalizer</strong>10 peaking</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>Volume</strong>0.0–1.0</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>SpectrumTap</strong>FFT 供給</div>
+          <div class="arrow">→</div>
+          <div class="box"><strong>WaveOutEvent</strong></div>
+        </div>
+        <ul>
+          <li>位置とシークは元の <code>WaveStream</code> が担う</li>
+          <li>EQ 変更は再生中でも <code>EqualizerProvider.Update</code> で係数だけ差し替える</li>
+          <li>自然終了は <code>PlaybackStopped</code>。リピート One / All / Off とシャッフルで次トラックを決める</li>
+          <li>MCI 経路はこのチェインを使わず、<code>play / pause / resume / stop</code> と位置ポーリングだけ行う</li>
+        </ul>
+      </section>
+
+      <section id="cd">
+        <h2><span>08</span>CD 読み取り</h2>
+        <h3>検出順</h3>
+        <ol>
+          <li><code>DriveInfo</code> から <code>CDRom</code> を列挙する</li>
+          <li><code>\\.\X:</code> を <code>GENERIC_READ</code> + 共有 Read/Write で開く</li>
+          <li><code>IOCTL_CDROM_READ_TOC</code> で TOC を読む</li>
+          <li>Control ビット 0x04 のデータトラックは捨て、オーディオだけ残す</li>
+          <li>先頭 1 セクタを <code>IOCTL_CDROM_RAW_READ</code>（CDDA, 2352 byte）で試し読みする</li>
+          <li>成功なら Digital。失敗ならハンドルを閉じ、MCI で再生しつつ TOC から <code>RipInfo</code> を後付けする</li>
+        </ol>
+        <h3>生読み取りの約束</h3>
+        <ul>
+          <li>出力はセクタあたり 2352 バイト（16 bit / 2 ch / 588 フレーム = 1/75 秒）</li>
+          <li><code>RAW_READ_INFO.DiskOffset</code> は LBA × 2048（cooked サイズ）。2352 ではない</li>
+          <li>一度に読むセクタ数は 26 以下（多くの ATAPI の上限に合わせる）</li>
+          <li>再生用 <code>CdWaveStream</code> は要求バイト数に合わせてセクタ境界からコピーする</li>
+        </ul>
+      </section>
+
+      <section id="eq">
+        <h2><span>09</span>イコライザ</h2>
+        <p>中心周波数 32 / 64 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz。Q = 1.41（約 1 オクターブ）。ゲインは −12〜+12 dB。</p>
+        <ul>
+          <li>フィルタはバンド × チャンネルで持ち、状態を混ぜない</li>
+          <li>ナイキスト近傍以上のバンドは作らない</li>
+          <li>処理後は ±1.0 にクランプする</li>
+          <li><code>T</code> でバイパス。<code>F</code> / <code>0</code> で全バンド 0 dB</li>
+        </ul>
+      </section>
+
+      <section id="spectrum">
+        <h2><span>10</span>スペクトル</h2>
+        <ul>
+          <li>FFT サイズ 2048（2 の冪）。Hann 窓</li>
+          <li>ステレオは加算平均してモノ化する</li>
+          <li>表示は約 40 Hz〜16 kHz を対数間隔のバーへ畳む</li>
+          <li>レベルはおおよそ −72 dB を床にした正規化</li>
+          <li>バーは即時上昇、緩やか減衰。ピークは別減衰</li>
+          <li>停止中は <code>Decay</code> だけ進める</li>
+        </ul>
+      </section>
+
+      <section id="rip">
+        <h2><span>11</span>抽出</h2>
+        <p>抽出は再生とは別タスクで走る。開始時に再生を止め、同じ TOC の LBA 範囲を WAV に書く。</p>
+        <table>
+          <thead><tr><th>項目</th><th>仕様</th></tr></thead>
+          <tbody>
+            <tr><td>形式</td><td>WAV、44 100 Hz、16 bit、ステレオ（CD-DA そのまま）</td></tr>
+            <tr><td>ファイル名</td><td><code>01 トラック 01.wav</code>。禁則文字は <code>_</code></td></tr>
+            <tr><td>既定フォルダ</td><td><code>%USERPROFILE%\Music\SOUND\&lt;ディスク名&gt;</code></td></tr>
+            <tr><td>再試行</td><td>チャンク 3 回。失敗時は 1 セクタずつ</td></tr>
+            <tr><td>キャンセル</td><td>フラグを見て未完了ファイルを削除</td></tr>
+            <tr><td>進捗</td><td>曲番号、曲名、バイト比。TUI の EXTRACT パネルへ反映</td></tr>
+          </tbody>
+        </table>
+        <p>デモ / フォルダディスクは <code>Rip</code> が無いので拒否する。MCI ディスクは TOC 再取得で LBA が埋まれば抽出できる。</p>
+      </section>
+
+      <section id="tui">
+        <h2><span>12</span>TUI と操作</h2>
+        <p>Spectre.Console の <code>Live</code> を約 20 FPS で更新する。フォルダ選択と抽出先指定だけ Live を抜け、プロンプト後に戻る。</p>
+        <table>
+          <thead><tr><th>キー</th><th>フォーカス</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Space</kbd></td><td>共通</td><td>再生 / 一時停止</td></tr>
+            <tr><td><kbd>S</kbd></td><td>共通 / 抽出中</td><td>停止、または抽出キャンセル</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>トラック</td><td>選択曲を再生</td></tr>
+            <tr><td><kbd>N</kbd> / <kbd>P</kbd></td><td>共通</td><td>次 / 前（3 秒超なら曲頭）</td></tr>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>トラック / EQ</td><td>5 秒シーク / バンド移動</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>トラック / EQ</td><td>選択移動 / ゲイン ±1 dB</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>共通</td><td>トラック ↔ イコライザ</td></tr>
+            <tr><td><kbd>X</kbd></td><td>共通</td><td>抽出プロンプト</td></tr>
+            <tr><td><kbd>D</kbd> <kbd>O</kbd> <kbd>M</kbd> <kbd>E</kbd></td><td>共通</td><td>CD 検出 / フォルダ / デモ / 取り出し</td></tr>
+            <tr><td><kbd>Q</kbd></td><td>共通</td><td>終了（抽出中なら先にキャンセル）</td></tr>
+          </tbody>
+        </table>
+        <p>画面は TRANSPORT、任意の EXTRACT、SPECTRUM、EQUALIZER、TRACKS または HELP、フッタの順。フォーカス中のパネルはゴールド枠にする。</p>
+      </section>
+
+      <section id="cli">
+        <h2><span>13</span>CLI</h2>
+        <table>
+          <thead><tr><th>引数</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td>（なし）</td><td>CD を探し、無ければデモで TUI</td></tr>
+            <tr><td><code>--demo</code> / <code>-d</code></td><td>デモディスクで TUI</td></tr>
+            <tr><td><code>--cd</code> / <code>-c</code></td><td>光学ドライブを検出して TUI</td></tr>
+            <tr><td><code>&lt;フォルダ&gt;</code></td><td>音声ファイルをディスク化して TUI</td></tr>
+            <tr><td><code>--rip</code> [<code>--track N</code>] [<code>--out DIR</code>]</td><td>TUI なしで WAV 抽出</td></tr>
+            <tr><td><code>--help</code></td><td>ヘルプを出して終了</td></tr>
+            <tr><td><code>--self-check</code></td><td>LBA、EQ、パイプライン、WAV の検査</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="states">
+        <h2><span>14</span>状態遷移</h2>
+        <h3>再生</h3>
+        <div class="state">
+          <div class="s"><b>Stopped</b>Space / Enter で Playing</div>
+          <div class="s"><b>Playing</b>Space で Paused。終端で次曲または Stopped</div>
+          <div class="s"><b>Paused</b>Space で Playing。S で Stopped</div>
+        </div>
+        <h3>抽出</h3>
+        <div class="state">
+          <div class="s"><b>RipIdle</b>X でプロンプト</div>
+          <div class="s"><b>RipRunning</b>進捗更新。S / Esc でキャンセル</div>
+          <div class="s"><b>RipDone / Failed / Canceled</b>結果をパネル表示</div>
+        </div>
+        <h3>Live を抜ける理由</h3>
+        <p><code>PendingAction</code> が <code>OpenFolder</code> / <code>RipPrompt</code> / <code>Quit</code> のときだけループを抜ける。Quit 以外はプロンプト後に Live を再開する。</p>
+      </section>
+
+      <section id="limits">
+        <h2><span>15</span>制約と今後</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>現在の制約</h3>
+            <ul>
+              <li>Windows 専用のドライブ制御</li>
+              <li>MCI 再生では EQ とシークが効かない</li>
+              <li>CD-TEXT を読まないため曲名は「トラック NN」</li>
+              <li>抽出は WAV のみ。エラー耐性は簡易リトライ止まり</li>
+              <li>同一ハンドルでの再生と抽出は同時に行わない</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>拡張余地</h3>
+            <ul>
+              <li>CD-TEXT / MusicBrainz のタイトル付与</li>
+              <li>FLAC 出力とオフセット補正</li>
+              <li>プリセット EQ（bass / vocal / flat）</li>
+              <li>プレイリストとギャップレス</li>
+              <li>複数ドライブ選択 UI</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        SOUND TUI CD Player 設計書 1.0 — 2026-09-12 — 実装リポジトリ <a href="https://github.com/tsukibo0805/TUI_SoundCDPlayer">tsukibo0805/TUI_SoundCDPlayer</a>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
