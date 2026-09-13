@@ -195,9 +195,7 @@ module App =
                 | Error _ -> ()
 
             AnsiConsole.MarkupLine("[grey]SOUND CD Player を起動しています…[/]")
-            AnsiConsole.MarkupLine("[grey]Discord 共有は [gold1]SOUND CD Player[/] 窓を選んでください。W で表示切替。[/]")
             DiscordShare.setRenderer(fun () -> View.plain player)
-            DiscordShare.start ()
             live player
             AnsiConsole.MarkupLine("[grey]停止しました。[/]")
         finally

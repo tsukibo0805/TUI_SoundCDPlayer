@@ -90,13 +90,14 @@ module DiscordShare =
     let private isTerminalClass name =
         name = "ConsoleWindowClass"
         || name.StartsWith("CASCADIA", StringComparison.OrdinalIgnoreCase)
-        || name.Contains("Console", StringComparison.OrdinalIgnoreCase)
 
     let private ownHandle () =
         if isNull form || form.IsDisposed || not form.IsHandleCreated then
             0n
         else
             form.Handle
+
+    let private ourPid () = uint32 (Diagnostics.Process.GetCurrentProcess().Id)
 
     let private isUsable hwnd =
         let own = ownHandle ()
@@ -108,33 +109,41 @@ module DiscordShare =
 
     let private findTerminalHwnd () =
         let cons = GetConsoleWindow()
-        let root = if cons = 0n then 0n else GetAncestor(cons, gaRoot)
+        let selfPid = ourPid ()
 
-        if isUsable root then
-            root
-        elif isUsable cons then
+        let pick hwnd =
+            isUsable hwnd && isTerminalClass (className hwnd)
+
+        if pick cons then
             cons
         else
-            let mutable consolePid = 0u
+            let root = if cons = 0n then 0n else GetAncestor(cons, gaRoot)
 
-            if cons <> 0n then
-                GetWindowThreadProcessId(cons, &consolePid) |> ignore
+            if pick root then
+                root
+            else
+                let mutable found = 0n
 
-            let mutable found = 0n
-            let proc = EnumWindowsProc(fun hwnd _ ->
-                if found = 0n && isUsable hwnd then
-                    let cls = className hwnd
-                    let mutable pid = 0u
-                    GetWindowThreadProcessId(hwnd, &pid) |> ignore
+                let proc =
+                    EnumWindowsProc(fun hwnd _ ->
+                        if found = 0n && pick hwnd then
+                            let mutable pid = 0u
+                            GetWindowThreadProcessId(hwnd, &pid) |> ignore
 
-                    if isTerminalClass cls || (consolePid <> 0u && pid = consolePid) then
-                        found <- hwnd
+                            if pid <> selfPid then
+                                found <- hwnd
 
-                found = 0n)
+                        found = 0n)
 
-            EnumWindows(proc, 0n) |> ignore
-            GC.KeepAlive(proc)
-            found
+                EnumWindows(proc, 0n) |> ignore
+                GC.KeepAlive(proc)
+
+                if found <> 0n then
+                    found
+                elif isUsable cons then
+                    cons
+                else
+                    0n
 
     let private isMostlyBlack (bmp: Bitmap) =
         let w = bmp.Width
@@ -154,61 +163,25 @@ module DiscordShare =
         n > 0 && lit * 20 < n
 
     let private captureWindow hwnd =
-        let w, h = clientSize hwnd
-
-        if w < 8 || h < 8 then
+        if hwnd = ownHandle () then
             None
         else
-            let bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb)
-            use g = Graphics.FromImage(bmp)
-            let hdc = g.GetHdc()
-            let printed = PrintWindow(hwnd, hdc, pwRenderFullContent)
+            let w, h = clientSize hwnd
 
-            if not printed then
-                let srcDc = GetDC(hwnd)
-                if srcDc <> 0n then
-                    BitBlt(hdc, 0, 0, w, h, srcDc, 0, 0, srcCopy) |> ignore
-                    ReleaseDC(hwnd, srcDc) |> ignore
-
-            g.ReleaseHdc(hdc)
-
-            if printed && not (isMostlyBlack bmp) then
-                Some bmp
+            if w < 8 || h < 8 then
+                None
             else
-                let mutable wr = RECT()
+                let bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb)
+                use g = Graphics.FromImage(bmp)
+                let hdc = g.GetHdc()
+                let printed = PrintWindow(hwnd, hdc, pwRenderFullContent)
+                g.ReleaseHdc(hdc)
 
-                if GetWindowRect(hwnd, &wr) then
-                    let sw = wr.Right - wr.Left
-                    let sh = wr.Bottom - wr.Top
-
-                    if sw > 8 && sh > 8 then
-                        try
-                            use screen = new Bitmap(sw, sh, PixelFormat.Format32bppArgb)
-                            use sg = Graphics.FromImage(screen)
-                            sg.CopyFromScreen(wr.Left, wr.Top, 0, 0, Size(sw, sh))
-
-                            if isMostlyBlack screen then
-                                bmp.Dispose()
-                                None
-                            else
-                                bmp.Dispose()
-                                Some(new Bitmap(screen))
-                        with _ ->
-                            if isMostlyBlack bmp then
-                                bmp.Dispose()
-                                None
-                            else
-                                Some bmp
-                    elif isMostlyBlack bmp then
-                        bmp.Dispose()
-                        None
-                    else
-                        Some bmp
-                elif isMostlyBlack bmp then
+                if printed && not (isMostlyBlack bmp) then
+                    Some bmp
+                else
                     bmp.Dispose()
                     None
-                else
-                    Some bmp
 
     let private drawFallback (width: int) (height: int) =
         let w = max 640 width
@@ -245,14 +218,9 @@ module DiscordShare =
         bmp
 
     let private nextFrame (targetSize: Size) =
-        let hwnd = findTerminalHwnd ()
-
-        if hwnd <> 0n then
-            match captureWindow hwnd with
-            | Some bmp -> bmp
-            | None -> drawFallback targetSize.Width targetSize.Height
-        else
-            drawFallback targetSize.Width targetSize.Height
+        match captureWindow (findTerminalHwnd ()) with
+        | Some bmp -> bmp
+        | None -> drawFallback targetSize.Width targetSize.Height
 
     let private runUi () =
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2) |> ignore
@@ -326,23 +294,29 @@ module DiscordShare =
             thread.Start()
 
     let toggle () =
-        let f = form
-
-        if isNull f || f.IsDisposed || not f.IsHandleCreated then
-            ()
+        if not started then
+            start ()
         else
-            try
-                f.BeginInvoke(
-                    Action(fun () ->
-                        if f.Visible then
-                            f.Hide()
-                        else
-                            f.Show()
-                            f.Activate())
-                )
-                |> ignore
-            with _ ->
+            let f = form
+
+            if isNull f || f.IsDisposed then
+                started <- false
+                start ()
+            elif not f.IsHandleCreated then
                 ()
+            else
+                try
+                    f.BeginInvoke(
+                        Action(fun () ->
+                            if f.Visible then
+                                f.Hide()
+                            else
+                                f.Show()
+                                f.Activate())
+                    )
+                    |> ignore
+                with _ ->
+                    ()
 
     let stop () =
         shuttingDown <- true

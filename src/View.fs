@@ -313,8 +313,8 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
 
 [bold gold1]Discord[/]
   コマンドプロンプトの窓は Discord から見ると別プロセス（無音）です。
-  起動時に開く [wheat1]SOUND CD Player[/] 窓を共有すると、映像と音の両方が乗ります。
-  [wheat1]W[/] で共有窓の表示を切り替えます。"""
+  [wheat1]W[/] で Discord 用の共有窓を開きます。もう一度押すと閉じます。
+  Discord では [wheat1]SOUND CD Player[/] 窓を共有すると、映像と音の両方が乗ります。"""
 
         Panel(Markup(text))
             .Header(" HELP ")
