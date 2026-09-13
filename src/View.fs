@@ -284,7 +284,7 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
 
     let private footer (player: AudioPlayer) =
         let keys =
-            " [grey]Space[/] 再生/停止  [grey]S[/] ストップ  [grey]X[/] 抽出  [grey]N/P[/] 次/前  [grey]←→[/] シーク  [grey],[/] [grey].[/] 音量  [grey]Tab[/] 切替  [grey]R[/] リピート  [grey]H[/] シャッフル  [grey]D[/] CD  [grey]O[/] フォルダ  [grey]M[/] デモ  [grey]E[/] 取り出し  [grey]?[/] ヘルプ  [grey]Q[/] 終了 "
+            " [grey]Space[/] 再生/停止  [grey]S[/] ストップ  [grey]X[/] 抽出  [grey]W[/] 共有窓  [grey]N/P[/] 次/前  [grey]←→[/] シーク  [grey],[/] [grey].[/] 音量  [grey]Tab[/] 切替  [grey]R[/] リピート  [grey]H[/] シャッフル  [grey]D[/] CD  [grey]O[/] フォルダ  [grey]M[/] デモ  [grey]E[/] 取り出し  [grey]?[/] ヘルプ  [grey]Q[/] 終了 "
 
         let status = $"[italic grey70]{esc player.Status}[/]"
         Markup($"{status}\n{keys}")
@@ -301,14 +301,20 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
   [wheat1]R[/]      リピート OFF/ALL/ONE      [wheat1]H[/]      シャッフル
   [wheat1]D[/]      CD 検出                   [wheat1]O[/]      フォルダを開く
   [wheat1]M[/]      デモディスク              [wheat1]E[/]      CD 取り出し
-  [wheat1]X[/]      CD を WAV 抽出            [wheat1]Q[/]      終了
+  [wheat1]X[/]      CD を WAV 抽出            [wheat1]W[/]      Discord 共有窓
+  [wheat1]Q[/]      終了
 
 [bold gold1]音源[/]
   光学ドライブの CD-DA をデジタル読み取りし、10バンド EQ をかけて再生します。
   生読み取りができない場合は MCI にフォールバックします（その場合 EQ は無効）。
   [wheat1]X[/] で選択トラックまたは全トラックを 44.1kHz / 16bit / ステレオ WAV に書き出します。
   フォルダ内の WAV / MP3 / M4A などもディスクとして扱えます。
-  ディスクが無いときはデモ信号で EQ を試せます。"""
+  ディスクが無いときはデモ信号で EQ を試せます。
+
+[bold gold1]Discord[/]
+  コマンドプロンプトの窓は Discord から見ると別プロセス（無音）です。
+  起動時に開く [wheat1]SOUND CD Player[/] 窓を共有すると、映像と音の両方が乗ります。
+  [wheat1]W[/] で共有窓の表示を切り替えます。"""
 
         Panel(Markup(text))
             .Header(" HELP ")
@@ -330,3 +336,51 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
         ]
 
         Rows(Array.ofList children) :> IRenderable
+
+    let plain (player: AudioPlayer) =
+        let disc = player.Disc
+        let track = player.CurrentTrack
+        let title = track |> Option.map (fun t -> t.Title) |> Option.defaultValue "—"
+        let number = track |> Option.map (fun t -> t.Number) |> Option.defaultValue 0
+        let pos = TimeFmt.mmss player.Position
+        let dur = TimeFmt.mmss player.Duration
+        let bar = progressBar player.Position player.Duration 36
+        let bars, _ = player.Analyzer.Snapshot()
+        let spec =
+            bars
+            |> Array.truncate 56
+            |> Array.map barChar
+            |> String.concat ""
+
+        let eq =
+            player.Bands
+            |> Array.map (fun b ->
+                let g = int (Math.Round(float b.GainDb))
+                let sign = if g > 0 then "+" else ""
+                sprintf "%s%s%d" b.Label sign g)
+            |> String.concat "  "
+
+        let tracks =
+            disc.Tracks
+            |> Array.truncate 8
+            |> Array.map (fun t ->
+                let mark =
+                    if t.Index = player.CurrentIndex && player.State <> Stopped then ">"
+                    else " "
+
+                sprintf "%s %02d  %s  %s" mark t.Number t.Title (TimeFmt.mmss t.Duration))
+            |> String.concat "\n"
+
+        $"""◆ SOUND  TUI CD PLAYER
+{player.State.Label}   {disc.Kind.Label}   {disc.Title}
+{sprintf "%02d" number} / {sprintf "%02d" disc.Tracks.Length}   {title}
+{pos}  {bar}  {dur}
+VOL {string (int (player.Volume * 100.f)) + "%"}   REPEAT {player.Repeat.Label}   EQ {if player.EqEnabled then "ON" else "OFF"}
+
+SPECTRUM
+{spec}
+
+EQ  {eq}
+
+TRACKS
+{tracks}"""

@@ -2,12 +2,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>Sound</RootNamespace>
     <AssemblyName>sound</AssemblyName>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +21,7 @@
     <Compile Include="src/Ripper.fs" />
     <Compile Include="src/Player.fs" />
     <Compile Include="src/View.fs" />
+    <Compile Include="src/ShareWindow.fs" />
     <Compile Include="src/App.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

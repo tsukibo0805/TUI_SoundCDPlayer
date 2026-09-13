@@ -19,6 +19,7 @@ module Input =
             match key.Key, key.KeyChar, player.Focus with
             | ConsoleKey.Q, _, _ -> player.RequestQuit()
             | ConsoleKey.X, _, _ -> player.RequestRip()
+            | ConsoleKey.W, _, _ -> DiscordShare.toggle ()
             | ConsoleKey.Spacebar, _, _ -> player.TogglePlay()
             | ConsoleKey.S, _, _ -> player.Stop()
             | ConsoleKey.Enter, _, _ -> player.PlaySelected()
@@ -194,9 +195,13 @@ module App =
                 | Error _ -> ()
 
             AnsiConsole.MarkupLine("[grey]SOUND CD Player を起動しています…[/]")
+            AnsiConsole.MarkupLine("[grey]Discord 共有は [gold1]SOUND CD Player[/] 窓を選んでください。W で表示切替。[/]")
+            DiscordShare.setRenderer(fun () -> View.plain player)
+            DiscordShare.start ()
             live player
             AnsiConsole.MarkupLine("[grey]停止しました。[/]")
         finally
+            DiscordShare.stop ()
             try
                 Console.CursorVisible <- true
             with _ ->
