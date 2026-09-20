@@ -8,7 +8,7 @@ open System.Text
 open System.Threading
 open System.Windows.Forms
 
-module DiscordShare =
+module TuiMirror =
     let private pwRenderFullContent = 2u
     let private gaRoot = 2u
     let private srcCopy = 0x00CC0020
@@ -145,43 +145,65 @@ module DiscordShare =
                 else
                     0n
 
-    let private isMostlyBlack (bmp: Bitmap) =
-        let w = bmp.Width
-        let h = bmp.Height
-        let mutable lit = 0
-        let mutable n = 0
-        let stepX = max 1 (w / 12)
-        let stepY = max 1 (h / 8)
+    let private litPixelsUntil64 (bmp: Bitmap) =
+        let bounds = Rectangle(0, 0, bmp.Width, bmp.Height)
+        let data = bmp.LockBits(bounds, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb)
 
-        for y in 2 .. stepY .. h - 3 do
-            for x in 2 .. stepX .. w - 3 do
-                let c = bmp.GetPixel(x, y)
-                n <- n + 1
-                if int c.R + int c.G + int c.B > 36 then
-                    lit <- lit + 1
+        try
+            let row = Array.zeroCreate<byte> (bmp.Width * 4)
+            let mutable lit = 0
+            let mutable y = 0
 
-        n > 0 && lit * 20 < n
+            // A fixed number of lit pixels is enough. A percentage of the whole
+            // window falsely rejects a dark terminal when it is maximized.
+            while y < bmp.Height && lit < 64 do
+                Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, row.Length)
+                let mutable x = 0
+
+                while x < bmp.Width && lit < 64 do
+                    let i = x * 4
+                    if int row[i] + int row[i + 1] + int row[i + 2] > 60 then
+                        lit <- lit + 1
+                    x <- x + 2
+
+                y <- y + 2
+
+            lit
+        finally
+            bmp.UnlockBits(data)
 
     let private captureWindow hwnd =
         if hwnd = ownHandle () then
-            None
+            Error "ミラー窓自身が撮影対象になっています"
         else
             let w, h = clientSize hwnd
 
             if w < 8 || h < 8 then
-                None
+                Error "撮影対象の窓が小さすぎます"
             else
                 let bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb)
-                use g = Graphics.FromImage(bmp)
-                let hdc = g.GetHdc()
-                let printed = PrintWindow(hwnd, hdc, pwRenderFullContent)
-                g.ReleaseHdc(hdc)
+                try
+                    let printed =
+                        use g = Graphics.FromImage(bmp)
+                        let hdc = g.GetHdc()
+                        try
+                            PrintWindow(hwnd, hdc, pwRenderFullContent)
+                        finally
+                            g.ReleaseHdc(hdc)
 
-                if printed && not (isMostlyBlack bmp) then
-                    Some bmp
-                else
+                    if not printed then
+                        bmp.Dispose()
+                        Error "PrintWindow が失敗しました"
+                    else
+                        let lit = litPixelsUntil64 bmp
+                        if lit < 64 then
+                            bmp.Dispose()
+                            Error $"撮影画像がほぼ黒です (明るい画素 {lit} 個、必要 64 個、{w}x{h})"
+                        else
+                            Ok bmp
+                with _ ->
                     bmp.Dispose()
-                    None
+                    Error "撮影処理で例外が発生しました"
 
     let private drawFallback (width: int) (height: int) =
         let w = max 640 width
@@ -214,13 +236,18 @@ module DiscordShare =
                 g.DrawString(line, font, cream, 18.0f, float32 y)
                 y <- y + 20
 
-        g.DrawString("Discord ではこのウィンドウを共有してください", font, muted, 18.0f, float32 (h - 28))
+        g.DrawString("TUI の状態を簡易表示しています", font, muted, 18.0f, float32 (h - 28))
         bmp
 
     let private nextFrame (targetSize: Size) =
-        match captureWindow (findTerminalHwnd ()) with
-        | Some bmp -> bmp
-        | None -> drawFallback targetSize.Width targetSize.Height
+        let hwnd = findTerminalHwnd ()
+
+        if hwnd = 0n then
+            drawFallback targetSize.Width targetSize.Height, Some "撮影対象のターミナルが見つかりません"
+        else
+            match captureWindow hwnd with
+            | Ok bmp -> bmp, None
+            | Error reason -> drawFallback targetSize.Width targetSize.Height, Some reason
 
     let private runUi () =
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2) |> ignore
@@ -241,7 +268,7 @@ module DiscordShare =
                 Height = 36,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = Padding(12, 0, 12, 0),
-                Text = "TUI をこの窓に映しています。Discord ではこの『SOUND CD Player』を共有してください。",
+                Text = "TUI をミラー表示しています。",
                 BackColor = Color.FromArgb(36, 32, 22),
                 ForeColor = Color.FromArgb(224, 176, 68)
             )
@@ -261,9 +288,13 @@ module DiscordShare =
 
         timer.Tick.Add(fun _ ->
             try
-                let bmp = nextFrame picture.ClientSize
+                let bmp, failure = nextFrame picture.ClientSize
                 let old = picture.Image
                 picture.Image <- bmp
+                hint.Text <-
+                    match failure with
+                    | Some reason -> $"ミラー不可: {reason}"
+                    | None -> "TUI をミラー表示しています。"
 
                 if not (isNull old) then
                     old.Dispose()
@@ -290,7 +321,7 @@ module DiscordShare =
             let thread = Thread(ThreadStart(runUi))
             thread.IsBackground <- true
             thread.SetApartmentState(ApartmentState.STA)
-            thread.Name <- "SOUND Discord Share"
+            thread.Name <- "SOUND TUI Mirror"
             thread.Start()
 
     let toggle () =

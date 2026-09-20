@@ -301,7 +301,7 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
   [wheat1]R[/]      リピート OFF/ALL/ONE      [wheat1]H[/]      シャッフル
   [wheat1]D[/]      CD 検出                   [wheat1]O[/]      フォルダを開く
   [wheat1]M[/]      デモディスク              [wheat1]E[/]      CD 取り出し
-  [wheat1]X[/]      CD を WAV 抽出            [wheat1]W[/]      Discord 共有窓
+  [wheat1]X[/]      CD を WAV 抽出            [wheat1]W[/]      ミラー窓
   [wheat1]Q[/]      終了
 
 [bold gold1]音源[/]
@@ -311,10 +311,8 @@ VOL {volumeBar player.Volume}   REPEAT [italic]{player.Repeat.Label}[/]   {shuff
   フォルダ内の WAV / MP3 / M4A などもディスクとして扱えます。
   ディスクが無いときはデモ信号で EQ を試せます。
 
-[bold gold1]Discord[/]
-  コマンドプロンプトの窓は Discord から見ると別プロセス（無音）です。
-  [wheat1]W[/] で Discord 用の共有窓を開きます。もう一度押すと閉じます。
-  Discord では [wheat1]SOUND CD Player[/] 窓を共有すると、映像と音の両方が乗ります。"""
+[bold gold1]ミラー窓[/]
+  [wheat1]W[/] で TUI のミラー窓を開きます。もう一度押すと閉じます。"""
 
         Panel(Markup(text))
             .Header(" HELP ")

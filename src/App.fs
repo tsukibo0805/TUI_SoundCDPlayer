@@ -19,7 +19,7 @@ module Input =
             match key.Key, key.KeyChar, player.Focus with
             | ConsoleKey.Q, _, _ -> player.RequestQuit()
             | ConsoleKey.X, _, _ -> player.RequestRip()
-            | ConsoleKey.W, _, _ -> DiscordShare.toggle ()
+            | ConsoleKey.W, _, _ -> TuiMirror.toggle ()
             | ConsoleKey.Spacebar, _, _ -> player.TogglePlay()
             | ConsoleKey.S, _, _ -> player.Stop()
             | ConsoleKey.Enter, _, _ -> player.PlaySelected()
@@ -195,11 +195,11 @@ module App =
                 | Error _ -> ()
 
             AnsiConsole.MarkupLine("[grey]SOUND CD Player を起動しています…[/]")
-            DiscordShare.setRenderer(fun () -> View.plain player)
+            TuiMirror.setRenderer(fun () -> View.plain player)
             live player
             AnsiConsole.MarkupLine("[grey]停止しました。[/]")
         finally
-            DiscordShare.stop ()
+            TuiMirror.stop ()
             try
                 Console.CursorVisible <- true
             with _ ->
