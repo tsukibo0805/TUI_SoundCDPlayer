@@ -11,7 +11,6 @@ open System.Windows.Forms
 module TuiMirror =
     let private pwRenderFullContent = 2u
     let private gaRoot = 2u
-    let private srcCopy = 0x00CC0020
 
     [<Struct; StructLayout(LayoutKind.Sequential)>]
     type RECT =
@@ -20,28 +19,17 @@ module TuiMirror =
         val mutable Right: int
         val mutable Bottom: int
 
-    type EnumWindowsProc = delegate of nativeint * nativeint -> bool
-
     [<DllImport("kernel32.dll")>]
     extern nativeint GetConsoleWindow()
+
+    [<DllImport("user32.dll")>]
+    extern nativeint GetForegroundWindow()
 
     [<DllImport("user32.dll")>]
     extern bool GetClientRect(nativeint hWnd, RECT& lpRect)
 
     [<DllImport("user32.dll")>]
-    extern bool GetWindowRect(nativeint hWnd, RECT& lpRect)
-
-    [<DllImport("user32.dll")>]
     extern bool PrintWindow(nativeint hwnd, nativeint hdcBlt, uint32 nFlags)
-
-    [<DllImport("user32.dll")>]
-    extern nativeint GetDC(nativeint hWnd)
-
-    [<DllImport("user32.dll")>]
-    extern int ReleaseDC(nativeint hWnd, nativeint hDC)
-
-    [<DllImport("gdi32.dll")>]
-    extern bool BitBlt(nativeint hdcDest, int x, int y, int cx, int cy, nativeint hdcSrc, int x1, int y1, int rop)
 
     [<DllImport("user32.dll")>]
     extern nativeint GetAncestor(nativeint hwnd, uint32 gaFlags)
@@ -52,8 +40,8 @@ module TuiMirror =
     [<DllImport("user32.dll", CharSet = CharSet.Unicode)>]
     extern int GetClassNameW(nativeint hWnd, StringBuilder lpClassName, int nMaxCount)
 
-    [<DllImport("user32.dll")>]
-    extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nativeint lParam)
+    [<DllImport("user32.dll", CharSet = CharSet.Unicode)>]
+    extern int GetWindowTextW(nativeint hWnd, StringBuilder lpString, int nMaxCount)
 
     [<DllImport("user32.dll")>]
     extern uint32 GetWindowThreadProcessId(nativeint hWnd, uint32& lpdwProcessId)
@@ -66,6 +54,10 @@ module TuiMirror =
     let mutable private started = false
     let mutable private renderer: (unit -> string) = fun () -> ""
     let private renderLock = obj ()
+    let private targetLock = obj ()
+    let mutable private targetHwnd = 0n
+    let mutable private targetPid = 0u
+    let mutable private targetTitle = ""
 
     let setRenderer (fn: unit -> string) =
         lock renderLock (fun () -> renderer <- fn)
@@ -79,6 +71,10 @@ module TuiMirror =
     let private className hwnd =
         let sb = StringBuilder(256)
         if GetClassNameW(hwnd, sb, sb.Capacity) > 0 then sb.ToString() else ""
+
+    let private windowTitle hwnd =
+        let sb = StringBuilder(512)
+        if GetWindowTextW(hwnd, sb, sb.Capacity) > 0 then sb.ToString() else ""
 
     let private clientSize hwnd =
         let mutable rect = RECT()
@@ -97,8 +93,6 @@ module TuiMirror =
         else
             form.Handle
 
-    let private ourPid () = uint32 (Diagnostics.Process.GetCurrentProcess().Id)
-
     let private isUsable hwnd =
         let own = ownHandle ()
         if hwnd = 0n || hwnd = own || not (IsWindowVisible hwnd) then
@@ -107,43 +101,54 @@ module TuiMirror =
             let w, h = clientSize hwnd
             w >= 160 && h >= 80
 
-    let private findTerminalHwnd () =
+    let private isTerminalWindow hwnd =
+        isUsable hwnd && isTerminalClass (className hwnd)
+
+    let private windowPid hwnd =
+        let mutable pid = 0u
+        GetWindowThreadProcessId(hwnd, &pid) |> ignore
+        pid
+
+    let private selectTerminalHwnd () =
         let cons = GetConsoleWindow()
-        let selfPid = ourPid ()
 
-        let pick hwnd =
-            isUsable hwnd && isTerminalClass (className hwnd)
-
-        if pick cons then
+        // A visible classic console belongs to this process. In Windows Terminal,
+        // GetConsoleWindow points to a hidden pseudoconsole, so use the window
+        // receiving the W key instead of enumerating unrelated terminal windows.
+        if isTerminalWindow cons then
             cons
         else
             let root = if cons = 0n then 0n else GetAncestor(cons, gaRoot)
 
-            if pick root then
+            if isTerminalWindow root then
                 root
             else
-                let mutable found = 0n
+                let foreground = GetForegroundWindow()
+                let foregroundRoot =
+                    if foreground = 0n then 0n else GetAncestor(foreground, gaRoot)
 
-                let proc =
-                    EnumWindowsProc(fun hwnd _ ->
-                        if found = 0n && pick hwnd then
-                            let mutable pid = 0u
-                            GetWindowThreadProcessId(hwnd, &pid) |> ignore
+                if isTerminalWindow foregroundRoot then foregroundRoot
+                elif isTerminalWindow foreground then foreground
+                else 0n
 
-                            if pid <> selfPid then
-                                found <- hwnd
+    let private pinTerminalWindow () =
+        let hwnd = selectTerminalHwnd ()
+        let pid = if hwnd = 0n then 0u else windowPid hwnd
+        let title = if hwnd = 0n then "" else windowTitle hwnd
+        lock targetLock (fun () ->
+            targetHwnd <- hwnd
+            targetPid <- pid
+            targetTitle <- title)
 
-                        found = 0n)
-
-                EnumWindows(proc, 0n) |> ignore
-                GC.KeepAlive(proc)
-
-                if found <> 0n then
-                    found
-                elif isUsable cons then
-                    cons
-                else
-                    0n
+    let private pinnedTerminalWindow () =
+        let hwnd, pid, title = lock targetLock (fun () -> targetHwnd, targetPid, targetTitle)
+        if pid <> 0u
+           && isTerminalWindow hwnd
+           && windowPid hwnd = pid
+           && (title = "" || windowTitle hwnd = title) then
+            hwnd
+        else
+            0n
 
     let private litPixelsUntil64 (bmp: Bitmap) =
         let bounds = Rectangle(0, 0, bmp.Width, bmp.Height)
@@ -240,10 +245,10 @@ module TuiMirror =
         bmp
 
     let private nextFrame (targetSize: Size) =
-        let hwnd = findTerminalHwnd ()
+        let hwnd = pinnedTerminalWindow ()
 
         if hwnd = 0n then
-            drawFallback targetSize.Width targetSize.Height, Some "撮影対象のターミナルが見つかりません"
+            drawFallback targetSize.Width targetSize.Height, Some "撮影元のターミナルが見つからないか、表示先が切り替わりました"
         else
             match captureWindow hwnd with
             | Ok bmp -> bmp, None
@@ -325,6 +330,8 @@ module TuiMirror =
             thread.Start()
 
     let toggle () =
+        pinTerminalWindow ()
+
         if not started then
             start ()
         else
