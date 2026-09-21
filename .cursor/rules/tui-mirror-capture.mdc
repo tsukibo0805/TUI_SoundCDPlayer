@@ -1,0 +1,15 @@
+---
+description: TUIミラー撮影の調査手順。黒判定とHWNDを混同しない。
+globs: src/ShareWindow.fs
+alwaysApply: false
+---
+
+# TUI ミラー撮影
+
+色が消える・枠が消える・最大化で壊れる、を見たら **HWND 探索の前に撮影パイプラインを測る**。詳細は `doc/knowledge/tui-mirror-capture.md`。
+
+- `PrintWindow` 成功後に画像を捨てているなら、黒判定が本命になり得る。暗い TUI を割合（例: lit/n < 5%）で棄却すると、最大化で空の暗い領域が増えて誤棄却する。
+- 現行は明るい画素が 64 個あれば採用する（`litPixelsUntil64`）。割合判定に戻さない。
+- 別 PowerShell を拾う問題は別件。`W` 押下時に撮影元を固定する。`EnumWindows` で全ターミナルを漁らない。
+- 棄却時は理由を残す（HWND、サイズ、PrintWindow、明るい画素数）。測らずに窓選びだけ変えない。
+- 先に公式仕様を読む。[PrintWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-printwindow) は成功ならその窓の画素が入る。[GetConsoleWindow](https://learn.microsoft.com/en-us/windows/console/getconsolewindow) の pseudoconsole は表示用ではない。成功画像を自前判定で捨てていないか、仕様と照らす。
