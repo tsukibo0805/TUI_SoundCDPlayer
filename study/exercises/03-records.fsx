@@ -1,6 +1,7 @@
 // 演習 03: レコードとモジュール
 // 実行: dotnet fsi study/exercises/03-records.fsx
 // 対応レッスン: 04-レコードとモジュール.md
+// レコードの外枠は用意済みです。フィールドを1つずつ完成させます。
 
 open System
 
@@ -34,25 +35,36 @@ type Disc = {
 }
 
 // ------------------------------------------------------------
-// 1. 1 曲作る。Number は Index + 1。Duration は秒から。
+// 1. 引数から Track レコードを1つ作る。
+//    Index / Title / Source は見本。Number と Duration を埋める。
 // ------------------------------------------------------------
 let makeTrack (index: int) (title: string) (seconds: float) (source: TrackSource) : Track =
-    failwith "TODO: makeTrack"
+    {
+        Index = index
+        Number = failwith "TODO 1-a: 1始まりの番号"
+        Title = title
+        Duration = failwith "TODO 1-b: TimeSpan.FromSeconds を呼ぶ"
+        Source = source
+    }
 
 // ------------------------------------------------------------
 // 2. タイトルだけ変えた新しい Track を返す（元は変更しない）。
+//    `{ 元の値 with フィールド = 新しい値 }` の空欄を埋める。
 // ------------------------------------------------------------
 let renameTrack (track: Track) (newTitle: string) : Track =
-    failwith "TODO: renameTrack"
+    { track with Title = failwith "TODO 2: 新しいタイトル" }
 
 // ------------------------------------------------------------
-// 3. ディスクの合計時間（秒、整数）。
+// 3. ディスクの全トラックの時間を合計し、整数秒で返す。
+//    3-a で1曲の秒数、3-b で配列全体の合計、3-c で整数化する。
 // ------------------------------------------------------------
 let totalSeconds (disc: Disc) : int =
-    failwith "TODO: totalSeconds"
+    disc.Tracks
+    |> Array.sumBy (fun track -> (failwith "TODO 3-a: Track から秒数を取り出す" : float))
+    |> failwith "TODO 3-b: 合計を int にする関数"
 
 // ------------------------------------------------------------
-// 4. EqPreset.createBands と同じ要領で、3 バンドを返す。
+// 4. EqBand の配列を返す。1つ目を見本に残り2つを作る。
 //    ラベルと周波数: ("32", 32.0), ("1k", 1000.0), ("16k", 16000.0)
 //    ゲインはすべて 0.0
 // ------------------------------------------------------------
@@ -60,7 +72,11 @@ type EqBand = { Label: string; Frequency: float; GainDb: float }
 
 module EqPreset =
     let createBands () : EqBand array =
-        failwith "TODO: EqPreset.createBands"
+        [|
+            { Label = "32"; Frequency = 32.0; GainDb = 0.0 }
+            failwith "TODO 4-a: 1k の EqBand レコード"
+            failwith "TODO 4-b: 16k の EqBand レコード"
+        |]
 
 // --- 自動検査 ---
 

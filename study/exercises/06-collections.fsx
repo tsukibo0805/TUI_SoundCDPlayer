@@ -1,6 +1,9 @@
 // 演習 06: コレクションとパイプライン
 // 実行: dotnet fsi study/exercises/06-collections.fsx
 // 対応レッスン: 07-コレクションとパイプライン.md
+// 1段だけを担当する小さな関数を作り、最後にパイプでつなぎます。
+
+open System.IO
 
 let mutable passed = 0
 let mutable failed = 0
@@ -25,43 +28,81 @@ type Track = {
 }
 
 // ------------------------------------------------------------
-// 1. 音声ファイルだけ残し、拡張子を小文字にしてソートした配列を返す。
-//    入力はフルパスではなくファイル名でよい。
+// 1-a. ファイル名から、小文字の拡張子を得る。
 // ------------------------------------------------------------
+let lowerExtension (name: string) : string =
+    name
+    |> Path.GetExtension
+    |> failwith "TODO 1-a: 小文字にする"
+
+// 1-b. audioExtensions に含まれるかを bool で返す。
+let isAudioFile (name: string) : bool =
+    let extension = failwith "TODO 1-b: lowerExtension を呼ぶ"
+    failwith "TODO 1-b: Set に extension が含まれるか調べる"
+
+// 1-c. 音声ファイルだけ残し、名前でソートする。
 let audioFiles (names: string array) : string array =
-    failwith "TODO: audioFiles"
+    names
+    |> Array.filter (fun name -> failwith "TODO 1-c: isAudioFile で判定")
+    |> failwith "TODO 1-c: 配列をソートする"
 
 // ------------------------------------------------------------
-// 2. ファイル名配列から Track 配列を作る。
+// 2-a. 1つのファイル名から Track を作る。
 //    Number は 1 始まり。Title は拡張子なし。Rip は None。
 //    Ext は小文字の拡張子（先頭ドット付き）。
 // ------------------------------------------------------------
+let toTrack (index: int) (name: string) : Track =
+    {
+        Number = failwith "TODO 2-a: 1始まりの番号"
+        Title = failwith "TODO 2-a: 拡張子を除いた名前"
+        Ext = failwith "TODO 2-a: lowerExtension を呼ぶ"
+        Rip = None
+    }
+
+// 2-b. mapi から、上で作った toTrack を呼ぶ。
 let toTracks (names: string array) : Track array =
-    failwith "TODO: toTracks"
+    names
+    |> Array.mapi (fun index name -> failwith "TODO 2-b: toTrack を呼ぶ")
 
 // ------------------------------------------------------------
 // 3. Rip があるトラックだけ (Number, Sectors) にする。
 //    trackFilter が Some n なら、その番号だけ。
 // ------------------------------------------------------------
 let ripTargets (tracks: Track array) (trackFilter: int option) : (int * int) array =
-    failwith "TODO: ripTargets"
+    tracks
+    |> Array.choose (fun track ->
+        match track.Rip with
+        | Some rip when trackFilter.IsNone || trackFilter = Some track.Number ->
+            failwith "TODO 3-a: 番号とセクタ数を Some に入れる"
+        | _ -> failwith "TODO 3-b: 対象外を choose から捨てる")
 
 // ------------------------------------------------------------
 // 4. タイトルを "NN title" 形式で最大 n 件、改行連結する。
 //    NN は 2 桁。例: "01 ノイズ"
 // ------------------------------------------------------------
 let listTitles (tracks: Track array) (n: int) : string =
-    failwith "TODO: listTitles"
+    tracks
+    |> Array.truncate (failwith "TODO 4-a: 最大件数")
+    |> Array.map (fun track -> failwith "TODO 4-b: 2桁番号とタイトルの文字列")
+    |> failwith "TODO 4-c: 改行で連結する関数"
 
 // --- 自動検査 ---
 
 let files =
     [| "b.MP3"; "notes.txt"; "a.wav"; "cover.png"; "c.m4a" |]
 
+check "lower extension" ".mp3" (lowerExtension "b.MP3")
+check "audio yes" true (isAudioFile "b.MP3")
+check "audio no" false (isAudioFile "notes.txt")
 check
     "filter-sort"
     [| "a.wav"; "b.MP3"; "c.m4a" |]
     (audioFiles files)
+
+let singleTrack = toTrack 0 "noise.WAV"
+check "single number" 1 singleTrack.Number
+check "single title" "noise" singleTrack.Title
+check "single ext" ".wav" singleTrack.Ext
 
 let tracks = toTracks [| "noise.wav"; "bass.mp3" |]
 check "len" 2 tracks.Length

@@ -157,4 +157,11 @@ F# らしく option に包み直しています。外側の API は Result/optio
 
 ## 演習
 
-`study/exercises/05-option-result.fsx` で、パースとファイル名検査を option / Result で書きます。
+`study/exercises/05-option-result.fsx` で、option / Result のケースを1段ずつ扱います。
+
+1. `TryParse` の成功だけを `Some` にする
+2. 同じ `option` 処理を、最初は `match`、次は `Option.defaultValue` で書く
+3. パスの整形と検査を分け、成功値を `Ok`、理由を `Error` にする
+4. `Ok()` から始め、コマンドを1件ずつ `Result.bind` でつなぐ
+
+最初から短い書き方を狙わず、まず `Some` / `None`、`Ok` / `Error` の両方が見える形を完成させます。

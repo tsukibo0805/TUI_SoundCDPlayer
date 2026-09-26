@@ -1,6 +1,7 @@
 // 演習 02: 判別共用体
 // 実行: dotnet fsi study/exercises/02-unions.fsx
 // 対応レッスン: 03-判別共用体.md
+// match の外枠と一部の枝は用意済みです。未完成の枝を上から埋めます。
 
 let mutable passed = 0
 let mutable failed = 0
@@ -34,32 +35,46 @@ type TrackSource =
     | DigitalCd of startLba: int * sectors: int
 
 // ------------------------------------------------------------
-// 1. 再生状態の短いラベル。
-//    Stopped -> "STOP" / Playing -> "PLAY" / Paused -> "PAUSE"
+// 1. 再生状態の短いラベルを返す。
+//    Stopped の枝を見本に、残り2枝の右辺だけを埋める。
 // ------------------------------------------------------------
 let stateLabel (state: PlaybackState) : string =
-    failwith "TODO: stateLabel"
+    match state with
+    | Stopped -> "STOP"
+    | Playing -> failwith "TODO 1-a: Playing のラベル"
+    | Paused -> failwith "TODO 1-b: Paused のラベル"
 
 // ------------------------------------------------------------
 // 2. リピートを OFF → ALL → ONE → OFF と循環させる。
+//    矢印の左側がパターン、右側が戻り値になる。
 // ------------------------------------------------------------
 let nextRepeat (mode: RepeatMode) : RepeatMode =
-    failwith "TODO: nextRepeat"
+    match mode with
+    | RepeatOff -> RepeatAll
+    | RepeatAll -> failwith "TODO 2-a: ALL の次"
+    | RepeatOne -> failwith "TODO 2-b: ONE の次"
 
 // ------------------------------------------------------------
-// 3. 音源の説明文。
+// 3. ケースの中のデータを取り出し、音源の説明文を作る。
 //    AudioFile "a.wav"          -> "file:a.wav"
 //    DemoTone Bass              -> "demo:Bass"
 //    DigitalCd (150, 75)        -> "cd:150+75"
+//    パターンで付けた名前が、右辺で使えることを確認する。
 // ------------------------------------------------------------
 let describeSource (source: TrackSource) : string =
-    failwith "TODO: describeSource"
+    match source with
+    | AudioFile path -> $"file:{path}"
+    | DemoTone kind -> failwith "TODO 3-a: kind を string にして demo: の後ろへ置く"
+    | DigitalCd(startLba, sectors) -> failwith "TODO 3-b: 2つの数を cd:開始+長さ の形にする"
 
 // ------------------------------------------------------------
 // 4. デジタル CD ならセクタ数、それ以外は 0。
+//    開始位置は使わないため `_` で捨てる。2枝だけで書ける。
 // ------------------------------------------------------------
 let sectorCount (source: TrackSource) : int =
-    failwith "TODO: sectorCount"
+    match source with
+    | DigitalCd(_, sectors) -> failwith "TODO 4-a: 取り出した値を返す"
+    | _ -> failwith "TODO 4-b: CD 以外の値"
 
 // --- 自動検査 ---
 
