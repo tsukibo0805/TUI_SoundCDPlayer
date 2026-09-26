@@ -19,6 +19,7 @@ let check name expected actual =
 // ------------------------------------------------------------
 // 1. トラック番号をパースする。1以上の整数だけ Some にする。
 //    TryParse は `(成功したか, 変換後の値)` を返す。
+//    仕様: 1以上ならSome。0、負数、整数でない文字列はすべてNone。
 // ------------------------------------------------------------
 let parseTrackNumber (text: string) : int option =
     match Int32.TryParse text with
@@ -27,6 +28,7 @@ let parseTrackNumber (text: string) : int option =
 
 // ------------------------------------------------------------
 // 2-a. option の曲名を match で表示用にする。None なら "—"。
+//    仕様: Someの文字列は加工せずそのまま返す。Noneだけ"—"に置き換える。
 // ------------------------------------------------------------
 let displayTitleWithMatch (title: string option) : string =
     match title with
@@ -41,6 +43,7 @@ let displayTitle (title: string option) : string =
 // 3. 出力先パスを検査する。
 //    空 / 空白のみ -> Error "empty"
 //    それ以外     -> Ok (前後空白を除いた文字列)
+//    仕様: 判定と成功値の両方にTrim後の文字列を使う。ディレクトリの実在確認はしない。
 // ------------------------------------------------------------
 let validateOutputDir (path: string) : Result<string, string> =
     let trimmed = failwith "TODO 3-a: path の前後空白を除く"
@@ -54,6 +57,11 @@ let validateOutputDir (path: string) : Result<string, string> =
 // 4. コマンド列を順に実行する。どれかが Error ならそこで止める。
 //    全部 Ok なら Ok "ready"
 //    fold の枠は用意済み。4-a → 4-b → 4-c の順に埋める。
+//
+// 仕様:
+// - sendは"ok:"で始まるコマンドだけ成功し、それ以外はコマンド文字列をErrorにする。
+// - 入力順に実行し、最初のError以降のコマンドは実行しない。
+// - 空リストを含め、全件成功した場合は Ok "ready"。
 // ------------------------------------------------------------
 let openDrive (cmds: string list) : Result<string, string> =
     let send (cmd: string) =

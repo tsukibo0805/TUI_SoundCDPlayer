@@ -51,6 +51,7 @@ type Disc = {
 
 // ------------------------------------------------------------
 // 1. TimeSpan を "mm:ss" にする（01-values.fsx の復習）。
+//    仕様: 負数は0秒、小数は切り捨て、分と秒を最低2桁で表示する。
 // ------------------------------------------------------------
 let mmss (t: TimeSpan) : string =
     let total = failwith "TODO 1-a: TotalSeconds を int にする"
@@ -60,6 +61,8 @@ let mmss (t: TimeSpan) : string =
 
 // ------------------------------------------------------------
 // 2-a. Trackを1つ作る補助関数を完成させる。
+//    仕様: Indexは0始まり、Numberは1始まり。secondsはDurationへ秒単位で保存する。
+//          kindはデモ音源名で、SourceはDemoTone kindとする。
 // ------------------------------------------------------------
 let makeDemoTrack index title seconds kind : Track =
     {
@@ -74,6 +77,7 @@ let makeDemoTrack index title seconds kind : Track =
 //    Title は "デモディスク"。Tracks は次の2曲:
 //    ノイズ / 40 秒 / DemoTone "Noise"
 //    和音 / 50 秒 / DemoTone "Chord"
+//    仕様: 記載順の2曲を、Index 0と1で格納する。
 // ------------------------------------------------------------
 let demoDisc () : Disc =
     {
@@ -87,6 +91,7 @@ let demoDisc () : Disc =
 
 // ------------------------------------------------------------
 // 3. 次の曲の index を計算する。シャッフルは無し。
+//    仕様: currentは0始まり。空なら0。末尾以外ではモードに関係なく次へ進む。
 //    RepeatOne は current のまま。
 //    RepeatAll は末尾の次が 0。
 //    RepeatOff は末尾の次も current のまま。
@@ -94,18 +99,17 @@ let demoDisc () : Disc =
 let nextIndex (disc: Disc) (current: int) (repeat: RepeatMode) : int =
     if disc.Tracks.Length = 0 then
         failwith "TODO 3-a: 空の場合"
-    elif repeat = RepeatOne then
-        failwith "TODO 3-b: 1曲リピートの場合"
     elif current + 1 < disc.Tracks.Length then
-        failwith "TODO 3-c: 次の曲がある場合"
+        failwith "TODO 3-b: 次の曲がある場合"
     else
         match repeat with
-        | RepeatAll -> failwith "TODO 3-d: 末尾から先頭へ"
-        | RepeatOff -> failwith "TODO 3-e: 末尾で停止"
-        | RepeatOne -> current // 上で処理済み。網羅性のため残す
+        | RepeatAll -> failwith "TODO 3-c: 末尾から先頭へ"
+        | RepeatOff -> failwith "TODO 3-d: 末尾で停止"
+        | RepeatOne -> failwith "TODO 3-e: 同じ曲を繰り返す"
 
 // ------------------------------------------------------------
 // 4-a. 状態を短い文字列にする。
+//    仕様: Stopped="STOP"、Playing="PLAY"、Paused="PAUSE"。
 // ------------------------------------------------------------
 let stateLabel state =
     match state with
@@ -116,6 +120,10 @@ let stateLabel state =
 // 4-b. 状態を画面用の1行にする。
 //    "PLAY  01/02  ノイズ  00:10/00:40"
 //    トラックが無ければ "STOP  --/--  —  00:00/00:00"
+//
+// 仕様:
+// - 区切りは半角空白2つ。曲番号と曲数は最低2桁。
+// - 時間は「現在位置/曲の長さ」。空ディスクでは曲名を"—"、時間を0にする。
 // ------------------------------------------------------------
 let statusLine (state: PlaybackState) (disc: Disc) (current: int) (position: TimeSpan) : string =
     if disc.Tracks.Length = 0 then
@@ -130,6 +138,7 @@ let statusLine (state: PlaybackState) (disc: Disc) (current: int) (position: Tim
 
 // ------------------------------------------------------------
 // 5. Space キー相当。最初の枝を見本に、残り2枝を埋める。
+//    仕様: Stopped/PausedからはPlayingへ、PlayingからはPausedへ移る。
 // ------------------------------------------------------------
 let toggle (state: PlaybackState) : PlaybackState =
     match state with

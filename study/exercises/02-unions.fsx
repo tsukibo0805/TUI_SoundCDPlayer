@@ -37,6 +37,7 @@ type TrackSource =
 // ------------------------------------------------------------
 // 1. 再生状態の短いラベルを返す。
 //    Stopped の枝を見本に、残り2枝の右辺だけを埋める。
+//    仕様: Stopped="STOP"、Playing="PLAY"、Paused="PAUSE"。
 // ------------------------------------------------------------
 let stateLabel (state: PlaybackState) : string =
     match state with
@@ -47,6 +48,7 @@ let stateLabel (state: PlaybackState) : string =
 // ------------------------------------------------------------
 // 2. リピートを OFF → ALL → ONE → OFF と循環させる。
 //    矢印の左側がパターン、右側が戻り値になる。
+//    仕様: RepeatOff → RepeatAll → RepeatOne → RepeatOff の一方向に循環する。
 // ------------------------------------------------------------
 let nextRepeat (mode: RepeatMode) : RepeatMode =
     match mode with
@@ -56,6 +58,7 @@ let nextRepeat (mode: RepeatMode) : RepeatMode =
 
 // ------------------------------------------------------------
 // 3. ケースの中のデータを取り出し、音源の説明文を作る。
+//    仕様: 接頭辞と区切り記号は次の完成例どおりとする。
 //    AudioFile "a.wav"          -> "file:a.wav"
 //    DemoTone Bass              -> "demo:Bass"
 //    DigitalCd (150, 75)        -> "cd:150+75"
@@ -70,6 +73,7 @@ let describeSource (source: TrackSource) : string =
 // ------------------------------------------------------------
 // 4. デジタル CD ならセクタ数、それ以外は 0。
 //    開始位置は使わないため `_` で捨てる。2枝だけで書ける。
+//    仕様: AudioFile と DemoTone はどちらも 0。DigitalCd は2番目の値 sectors を返す。
 // ------------------------------------------------------------
 let sectorCount (source: TrackSource) : int =
     match source with

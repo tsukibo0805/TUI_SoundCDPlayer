@@ -29,6 +29,11 @@ type Track = {
 
 // ------------------------------------------------------------
 // 1-a. ファイル名から、小文字の拡張子を得る。
+//
+// 仕様:
+// - 音声拡張子は audioExtensions にある .wav / .mp3 / .m4a の3種類だけ。
+// - 拡張子の大文字・小文字は区別しない。
+// - audioFilesが返すのは変換前の元ファイル名で、昇順に並べる。
 // ------------------------------------------------------------
 let lowerExtension (name: string) : string =
     name
@@ -50,6 +55,7 @@ let audioFiles (names: string array) : string array =
 // 2-a. 1つのファイル名から Track を作る。
 //    Number は 1 始まり。Title は拡張子なし。Rip は None。
 //    Ext は小文字の拡張子（先頭ドット付き）。
+//    仕様: indexは0始まりなのでNumberはindex + 1。Titleにはディレクトリ名も含めない。
 // ------------------------------------------------------------
 let toTrack (index: int) (name: string) : Track =
     {
@@ -67,6 +73,11 @@ let toTracks (names: string array) : Track array =
 // ------------------------------------------------------------
 // 3. Rip があるトラックだけ (Number, Sectors) にする。
 //    trackFilter が Some n なら、その番号だけ。
+//
+// 仕様:
+// - Rip=Noneのトラックは常に除外する。
+// - trackFilter=NoneならRipがある全曲、Some nならNumber=nの曲だけを対象にする。
+// - 元配列の順序を保つ。
 // ------------------------------------------------------------
 let ripTargets (tracks: Track array) (trackFilter: int option) : (int * int) array =
     tracks
@@ -79,6 +90,7 @@ let ripTargets (tracks: Track array) (trackFilter: int option) : (int * int) arr
 // ------------------------------------------------------------
 // 4. タイトルを "NN title" 形式で最大 n 件、改行連結する。
 //    NN は 2 桁。例: "01 ノイズ"
+//    仕様: 元の順序の先頭n件を使う。項目間だけに改行を入れ、末尾には入れない。
 // ------------------------------------------------------------
 let listTitles (tracks: Track array) (n: int) : string =
     tracks

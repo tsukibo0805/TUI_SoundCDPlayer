@@ -35,6 +35,7 @@ type Command =
 
 // ------------------------------------------------------------
 // 1. キーとフォーカスからコマンドを決める。
+//    仕様: キー文字は次の小文字で渡される。space/q はフォーカスに依存しない。
 //    "space"            -> PlayPause
 //    "left" + TrackList -> Seek -5
 //    "right" + TrackList -> Seek 5
@@ -59,6 +60,8 @@ let handle (key: string) (focus: FocusPane) : Command =
 
 // ------------------------------------------------------------
 // 2. 今の曲 index と曲数、リピートから「次の index」を返す。
+//    仕様: current は0始まり。count > 0 のとき current は有効範囲内とする。
+//    末尾以外ではリピート設定に関係なく current + 1 へ進む。
 //    最後の曲の次:
 //      RepeatAll -> 0
 //      RepeatOne -> 同じ index
@@ -78,6 +81,8 @@ let nextIndex (current: int) (count: int) (repeat: RepeatMode) : int =
 
 // ------------------------------------------------------------
 // 3-a. 3つの文字列を整数にできたときだけ、秒に変換する。
+//    仕様: m=分、s=秒、f=1/75秒単位のフレーム。
+//          戻り値は整数秒なので、余ったフレームは切り捨てる。
 // ------------------------------------------------------------
 let tryTimeParts (m: string) (s: string) (f: string) : int option =
     match Int32.TryParse m, Int32.TryParse s, Int32.TryParse f with
@@ -88,6 +93,8 @@ let tryTimeParts (m: string) (s: string) (f: string) : int option =
 // ------------------------------------------------------------
 // 3-b. "mm:ss:ff" または "t:mm:ss:ff" を秒（整数）にする。
 //    1 秒 = 75 フレーム。パースできなければ None。
+//    仕様: 4要素の先頭 t はトラック番号なので計算には使わない。
+//          要素数が3・4以外、または数値化できない要素があれば None。
 //    例: "00:01:00" -> Some 1
 //        "01:00:00:00" -> Some 0   （トラック番号は捨てて mm:ss:ff）
 // ------------------------------------------------------------
@@ -116,8 +123,10 @@ check "stay off" 3 (nextIndex 3 4 RepeatOff)
 check "empty" 0 (nextIndex 0 0 RepeatAll)
 
 check "time parts" (Some 1) (tryTimeParts "00" "01" "00")
+check "time frames" (Some 1) (tryTimeParts "00" "00" "75")
 check "bad parts" None (tryTimeParts "x" "01" "00")
 check "mmssff" (Some 1) (parseMmssff "00:01:00")
+check "frames" (Some 1) (parseMmssff "00:00:75")
 check "tmsf" (Some 0) (parseMmssff "01:00:00:00")
 check "bad" None (parseMmssff "nope")
 

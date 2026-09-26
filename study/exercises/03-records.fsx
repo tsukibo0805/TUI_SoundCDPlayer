@@ -37,6 +37,10 @@ type Disc = {
 // ------------------------------------------------------------
 // 1. 引数から Track レコードを1つ作る。
 //    Index / Title / Source は見本。Number と Duration を埋める。
+//
+// 仕様:
+// - Index は配列用の0始まり、画面に出す Number は1始まりなので index + 1。
+// - seconds は秒単位の値で、Duration に同じ長さの TimeSpan を保存する。
 // ------------------------------------------------------------
 let makeTrack (index: int) (title: string) (seconds: float) (source: TrackSource) : Track =
     {
@@ -50,13 +54,15 @@ let makeTrack (index: int) (title: string) (seconds: float) (source: TrackSource
 // ------------------------------------------------------------
 // 2. タイトルだけ変えた新しい Track を返す（元は変更しない）。
 //    `{ 元の値 with フィールド = 新しい値 }` の空欄を埋める。
+//    仕様: Title 以外の全フィールドは元と同じ値にする。
 // ------------------------------------------------------------
 let renameTrack (track: Track) (newTitle: string) : Track =
     { track with Title = failwith "TODO 2: 新しいタイトル" }
 
 // ------------------------------------------------------------
 // 3. ディスクの全トラックの時間を合計し、整数秒で返す。
-//    3-a で1曲の秒数、3-b で配列全体の合計、3-c で整数化する。
+//    3-a で1曲の秒数を取り出し、Array.sumByで合計してから3-bで整数化する。
+//    仕様: TotalSeconds を合計した後、小数部分を切り捨てて int にする。空配列なら0。
 // ------------------------------------------------------------
 let totalSeconds (disc: Disc) : int =
     disc.Tracks
@@ -67,6 +73,7 @@ let totalSeconds (disc: Disc) : int =
 // 4. EqBand の配列を返す。1つ目を見本に残り2つを作る。
 //    ラベルと周波数: ("32", 32.0), ("1k", 1000.0), ("16k", 16000.0)
 //    ゲインはすべて 0.0
+//    仕様: 上記の順で3件を返し、全バンドの初期ゲインを0.0にする。
 // ------------------------------------------------------------
 type EqBand = { Label: string; Frequency: float; GainDb: float }
 

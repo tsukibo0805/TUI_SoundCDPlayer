@@ -66,7 +66,7 @@ let parseMmssff (text: string) : int option =
 
     let toSeconds m s f =
         match tryInt m, tryInt s, tryInt f with
-        | Some mv, Some sv, Some _ -> Some(mv * 60 + sv)
+        | Some mv, Some sv, Some fv -> Some(mv * 60 + sv + fv / 75)
         | _ -> None
 
     match parts with
@@ -91,6 +91,7 @@ check "stay off" 3 (nextIndex 3 4 RepeatOff)
 check "empty" 0 (nextIndex 0 0 RepeatAll)
 
 check "mmssff" (Some 1) (parseMmssff "00:01:00")
+check "frames" (Some 1) (parseMmssff "00:00:75")
 check "tmsf" (Some 0) (parseMmssff "01:00:00:00")
 check "bad" None (parseMmssff "nope")
 
